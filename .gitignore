@@ -125,3 +125,4 @@ assets
 
 ${data}
 *.etli
+.history
