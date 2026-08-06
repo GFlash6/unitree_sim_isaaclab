@@ -56,6 +56,21 @@ ros2 run fast_livo fastlivo_mapping --ros-args \
   --params-file holoagent_bridge/fast_livo_mid360_sim.yaml
 ```
 
+Before starting FAST-LIVO, keep the robot stationary and require the live
+sensor validator to pass:
+
+```bash
+source /opt/ros/humble/setup.bash
+/usr/bin/python3 holoagent_bridge/validate_lidar_imu_sync.py --duration 10 \
+  --output-json holoagent_bridge/validation/lidar_imu_sync.json
+```
+
+It exits with status 2 for missing/stale samples, non-finite or non-monotonic
+data, insufficient rates or overlap, excessive timestamp separation, an
+implausible gravity magnitude, or stationary angular motion. The FAST-LIVO
+overlay contains the LiDAR-to-IMU transform derived from the G1 USD fixed-joint
+poses: it is not an identity placeholder.
+
 Save a native relocation map only after real keyframes have accumulated. The
 call is synchronous: `success=True` means all required files were written and
 validated before the response was sent.

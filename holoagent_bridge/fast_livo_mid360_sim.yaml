@@ -1,0 +1,31 @@
+/**:
+  ros__parameters:
+    common:
+      lid_topic: "/mid360/points"
+      imu_topic: "/livox/imu"
+      img_en: 0
+      lidar_en: 1
+
+    # Transform LiDAR-frame points into imu_in_torso. Values come from the
+    # G1 USD fixed-joint poses (mid360_joint relative to imu_in_torso_joint),
+    # not from registration or hand tuning.
+    extrin_calib:
+      extrinsic_T: [0.0398735, 0.00227, 0.26826]
+      extrinsic_R: [0.999194395, 0.0, 0.040131795,
+                    0.0, 1.0, 0.0,
+                   -0.040131795, 0.0, 0.999194395]
+
+    preprocess:
+      lidar_type: 7  # XYZ32: simulator publishes geometry only, with no RGB/time fields
+      point_filter_num: 1
+      scan_line: 32
+      blind: 0.1
+
+    imu:
+      imu_en: true
+
+    wheel:
+      enable_wheel_odom: false
+
+    uav:
+      gravity_align_en: true
