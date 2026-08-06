@@ -100,6 +100,8 @@ _obs_cache = {
     "combined_buf": None,
     "dds_last_ms": 0,
     "dds_min_interval_ms": 20,
+    "imu_timestamp_ns": 0,
+    "imu_sample": None,
 }
 
 # IMU 加速度缓存：用于通过速度差分计算加速度
@@ -208,18 +210,26 @@ def get_robot_boy_joint_states(
 
     # Export the exact IMU sample consumed by DDS, using simulator time so the
     # ROS bridge can synchronize it with the ray-caster point cloud.
-    imu_sample = None
+    imu_timestamp_ns = int(float(env.sim.current_time) * 1_000_000_000)
+    if imu_timestamp_ns < _obs_cache["imu_timestamp_ns"]:
+        raise RuntimeError(
+            f"simulator time regressed: {imu_timestamp_ns} < {_obs_cache['imu_timestamp_ns']}"
+        )
+    imu_sample = _obs_cache["imu_sample"]
     if combined_buf.shape[0] > 0:
-        imu_data = get_robot_imu_data(env)
-        if imu_data.shape[0] > 0:
-            imu_sample = imu_data[0].contiguous().cpu().numpy()
-            imu_timestamp_ns = int(float(env.sim.current_time) * 1_000_000_000)
-            _imu_writer.write_sample(
+        if imu_timestamp_ns > _obs_cache["imu_timestamp_ns"]:
+            imu_data = get_robot_imu_data(env)
+            imu_sample = imu_data[0].contiguous().cpu().numpy() if imu_data.shape[0] > 0 else None
+            if imu_sample is not None and _imu_writer.write_sample(
                 imu_timestamp_ns,
                 imu_sample[3:7],
                 imu_sample[7:10],
                 imu_sample[10:13],
-            )
+            ):
+                _obs_cache["imu_timestamp_ns"] = imu_timestamp_ns
+                _obs_cache["imu_sample"] = imu_sample
+            else:
+                imu_sample = None
 
     # write to DDS（限速发布，避免高频CPU拷贝）
     if enable_dds and combined_buf.shape[0] > 0:

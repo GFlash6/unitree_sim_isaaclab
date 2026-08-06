@@ -71,6 +71,22 @@ implausible gravity magnitude, or stationary angular motion. The FAST-LIVO
 overlay contains the LiDAR-to-IMU transform derived from the G1 USD fixed-joint
 poses: it is not an identity placeholder.
 
+Record the independent IsaacLab root pose during an actual run, then compare a
+timestamped eight-column localization trajectory such as `relo_pose.txt`:
+
+```bash
+/usr/bin/python3 holoagent_bridge/record_ground_truth.py \
+  holoagent_bridge/validation/ground_truth.txt --duration 30
+/usr/bin/python3 holoagent_bridge/evaluate_localization_accuracy.py \
+  holoagent_bridge/validation/ground_truth.txt /absolute/map/relo_pose.txt \
+  --output-json holoagent_bridge/validation/relocalization_accuracy.json
+```
+
+The evaluator uses ground truth only after the run. It removes only the initial
+rigid map/world origin alignment, then checks translation/yaw RMSE, final error,
+and discontinuities. Ground truth is never published into FAST-LIVO,
+relocalization, Nav2, or the control path.
+
 Save a native relocation map only after real keyframes have accumulated. The
 call is synchronous: `success=True` means all required files were written and
 validated before the response was sent.

@@ -84,6 +84,9 @@ def test_g1_observation_exports_real_imu_with_simulator_timestamp() -> None:
     assert "imu_sample[7:10]" in obs
     assert "imu_sample[10:13]" in obs
     assert obs.count("get_robot_imu_data(env)") == 1
+    assert '"imu_timestamp_ns": 0' in obs
+    assert 'if imu_timestamp_ns > _obs_cache["imu_timestamp_ns"]:' in obs
+    assert '_obs_cache["imu_sample"] = imu_sample' in obs
 
 
 if __name__ == "__main__":

@@ -114,6 +114,10 @@ from dds.sim_state_dds import *
 from action_provider.create_action_provider import create_action_provider
 from tools.get_stiffness import get_robot_stiffness_from_env
 from tools.get_reward import get_step_reward_value,get_current_rewards
+from tasks.common_observations.mid360_state import get_mid360_points
+from tools.ground_truth_shared_memory_utils import GroundTruthWriter
+
+_ground_truth_writer = GroundTruthWriter()
 
 def setup_signal_handlers(controller,dds_manager=None,image_server=None):
     """set signal handlers"""
@@ -534,6 +538,15 @@ def main():
                 
                 # execute control step (in main thread, support rendering)
                 controller.step()
+                get_mid360_points(env)
+                root_pose = env.scene["robot"].data.root_link_pose_w[0]
+                ground_truth_timestamp_ns = int(float(env.sim.current_time) * 1_000_000_000)
+                root_pose_sample = root_pose.contiguous().cpu().numpy()
+                _ground_truth_writer.write_pose(
+                    ground_truth_timestamp_ns,
+                    root_pose_sample[:3],
+                    root_pose_sample[3:7],
+                )
 
                 # print statistics and loop frequency periodically
                 if current_time - last_stats_time >= args_cli.stats_interval:

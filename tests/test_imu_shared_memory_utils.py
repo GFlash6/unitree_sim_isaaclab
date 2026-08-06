@@ -76,3 +76,17 @@ def test_invalid_or_non_finite_measurements_are_rejected() -> None:
     finally:
         writer.close()
         unlink(name)
+
+
+def test_writer_rejects_duplicate_or_regressive_source_time() -> None:
+    name = shm_name()
+    writer = ImuWriter(name)
+    try:
+        values = ([1, 0, 0, 0], [0, 0, 9.81], [0, 0, 0])
+        assert writer.write_sample(10, *values)
+        assert not writer.write_sample(10, *values)
+        assert not writer.write_sample(9, *values)
+        assert writer.write_sample(11, *values)
+    finally:
+        writer.close()
+        unlink(name)
