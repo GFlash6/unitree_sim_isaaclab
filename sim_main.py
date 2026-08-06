@@ -459,6 +459,7 @@ def main():
         
         
         reward_interval = max(1, args_cli.reward_interval)
+        imu_body_index = env.scene["robot"].data.body_names.index("imu_in_torso")
 
         # use torch.inference_mode() and exception suppression
         with contextlib.suppress(KeyboardInterrupt), torch.inference_mode():
@@ -539,13 +540,13 @@ def main():
                 # execute control step (in main thread, support rendering)
                 controller.step()
                 get_mid360_points(env)
-                root_pose = env.scene["robot"].data.root_link_pose_w[0]
+                imu_pose = env.scene["robot"].data.body_link_pose_w[0, imu_body_index]
                 ground_truth_timestamp_ns = int(float(env.sim.current_time) * 1_000_000_000)
-                root_pose_sample = root_pose.contiguous().cpu().numpy()
+                imu_pose_sample = imu_pose.contiguous().cpu().numpy()
                 _ground_truth_writer.write_pose(
                     ground_truth_timestamp_ns,
-                    root_pose_sample[:3],
-                    root_pose_sample[3:7],
+                    imu_pose_sample[:3],
+                    imu_pose_sample[3:7],
                 )
 
                 # print statistics and loop frequency periodically

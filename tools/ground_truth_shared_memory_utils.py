@@ -1,4 +1,4 @@
-"""Shared-memory transport for timestamped IsaacLab root ground truth."""
+"""Shared-memory transport for timestamped IsaacLab localization ground truth."""
 
 from __future__ import annotations
 

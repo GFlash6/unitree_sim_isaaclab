@@ -62,6 +62,13 @@ def test_documented_sim_command_selects_wholebody_policy_provider() -> None:
     assert "--action_source dds_wholebody" in readme
 
 
+def test_documented_motion_command_is_sustained() -> None:
+    readme = (ROOT / "holoagent_bridge" / "README.md").read_text(encoding="utf-8")
+    assert "ros2 topic pub -r 10" in readme
+    assert "ros2 topic pub --once /cmd_vel" not in readme
+    assert "0.5 seconds" in readme
+
+
 def test_mapping_sequence_streams_real_isaaclab_mid360_motion() -> None:
     source = (ROOT / "holoagent_bridge" / "stream_mid360_mapping_sequence.py").read_text(encoding="utf-8")
     assert "write_root_pose_to_sim" in source
