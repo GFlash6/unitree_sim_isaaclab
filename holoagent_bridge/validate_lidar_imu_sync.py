@@ -40,7 +40,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--lidar-topic", default="/mid360/points")
     parser.add_argument("--imu-topic", default="/livox/imu")
-    parser.add_argument("--duration", type=positive_float, default=10.0)
+    parser.add_argument("--duration", type=positive_float, default=10.0, help="Required overlap in simulator seconds.")
+    parser.add_argument("--wall-timeout", type=positive_float, default=120.0)
     parser.add_argument("--output-json", help="Optional path for the machine-readable report.")
     return parser.parse_args(argv)
 
@@ -61,6 +62,27 @@ def _nearest_offset(reference: np.ndarray, samples: np.ndarray) -> float:
     left = np.maximum(right - 1, 0)
     offsets = np.minimum(np.abs(samples[right] - in_range), np.abs(samples[left] - in_range))
     return float(np.max(offsets))
+
+
+def collection_complete(
+    lidar_timestamps_s: Sequence[float], imu_timestamps_s: Sequence[float], required_overlap_s: float
+) -> bool:
+    if len(lidar_timestamps_s) < 2 or len(imu_timestamps_s) < 2:
+        return False
+    overlap = min(lidar_timestamps_s[-1], imu_timestamps_s[-1]) - max(
+        lidar_timestamps_s[0], imu_timestamps_s[0]
+    )
+    return overlap >= required_overlap_s
+
+
+def points_xyz_array(points) -> np.ndarray:
+    values = np.asarray(points)
+    if values.dtype.names and {"x", "y", "z"}.issubset(values.dtype.names):
+        return np.column_stack((values["x"], values["y"], values["z"])).astype(
+            np.float32, copy=False
+        )
+    values = np.asarray(list(points) if values.ndim == 0 else values, dtype=np.float32)
+    return values.reshape((-1, 3))
 
 
 def analyze_streams(
@@ -203,9 +225,8 @@ def main(argv: list[str]) -> int:
 
     def lidar_callback(msg: PointCloud2) -> None:
         nonlocal lidar_last_receive
-        xyz = np.asarray(
-            list(point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=False)),
-            dtype=np.float32,
+        xyz = points_xyz_array(
+            point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=False)
         )
         lidar_timestamps.append(_stamp_seconds(msg.header.stamp))
         lidar_counts.append(int(xyz.shape[0]))
@@ -225,7 +246,11 @@ def main(argv: list[str]) -> int:
     node.create_subscription(Imu, args.imu_topic, imu_callback, qos_profile_sensor_data)
     start = time.monotonic()
     try:
-        while rclpy.ok() and time.monotonic() - start < args.duration:
+        while (
+            rclpy.ok()
+            and time.monotonic() - start < args.wall_timeout
+            and not collection_complete(lidar_timestamps, imu_timestamps, args.duration)
+        ):
             rclpy.spin_once(node, timeout_sec=0.1)
     except KeyboardInterrupt:
         pass

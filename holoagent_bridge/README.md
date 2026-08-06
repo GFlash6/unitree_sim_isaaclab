@@ -11,8 +11,13 @@ Terminal 1, start a wholebody sim task:
 ```bash
 source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
 conda activate unitree_sim_env
-env -u DISPLAY python sim_main.py --device cuda:0 --headless --livestream 0 --enable_cameras --task Isaac-Move-Cylinder-G129-Dex1-Wholebody --robot_type g129 --enable_dex1_dds --enable_wholebody_dds
+env -u DISPLAY python sim_main.py --device cuda:0 --headless --livestream 0 --enable_cameras --task Isaac-Move-Cylinder-G129-Dex1-Wholebody --action_source dds_wholebody --robot_type g129 --enable_dex1_dds --enable_wholebody_dds
 ```
+
+Both `--action_source dds_wholebody` and `--enable_wholebody_dds` are required:
+the first selects the locomotion policy action provider, while the second
+creates its DDS run-command endpoint. With only the second flag, commands can
+arrive on DDS but the joint-command provider will ignore them.
 
 Terminal 2, source ROS2 and start the MID360 bridge:
 
@@ -65,7 +70,9 @@ source /opt/ros/humble/setup.bash
   --output-json holoagent_bridge/validation/lidar_imu_sync.json
 ```
 
-It exits with status 2 for missing/stale samples, non-finite or non-monotonic
+`--duration` is measured in source simulator time; the default wall timeout is
+120 seconds so a slower-than-real-time rendered simulation is still measured
+correctly. It exits with status 2 for missing/stale samples, non-finite or non-monotonic
 data, insufficient rates or overlap, excessive timestamp separation, an
 implausible gravity magnitude, or stationary angular motion. The FAST-LIVO
 overlay contains the LiDAR-to-IMU transform derived from the G1 USD fixed-joint

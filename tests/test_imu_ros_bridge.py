@@ -65,3 +65,9 @@ def test_timestamp_guard_rejects_regression_and_duplicate() -> None:
     with pytest.raises(bridge.TimestampRegressionError):
         guard.check(99)
 
+
+def test_publisher_qos_matches_fast_livo_reliable_subscription() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert "QoSReliabilityPolicy.RELIABLE" in source
+    assert "depth=2000" in source
+    assert "qos_profile_sensor_data" not in source

@@ -109,3 +109,15 @@ def test_fast_livo_overlay_enables_real_imu_and_declares_measured_extrinsic() ->
     assert "enable_wheel_odom: false" in config
     assert "extrinsic_T: [0.0398735, 0.00227, 0.26826]" in config
     assert "0.999194395, 0.0, 0.040131795" in config
+
+
+def test_collection_completion_uses_source_time_not_wall_time() -> None:
+    assert not validator.collection_complete([0.0, 1.0], [0.0, 1.0], 2.0)
+    assert validator.collection_complete([0.0, 2.1], [0.1, 2.2], 2.0)
+
+
+def test_xyz_array_accepts_ros_structured_numpy_points() -> None:
+    structured = np.array([(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)], dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4")])
+    xyz = validator.points_xyz_array(structured)
+    assert xyz.shape == (2, 3)
+    np.testing.assert_allclose(xyz, [[1, 2, 3], [4, 5, 6]])

@@ -112,14 +112,15 @@ def main(argv: list[str]) -> int:
     try:
         import rclpy
         from rclpy.node import Node
-        from rclpy.qos import qos_profile_sensor_data
+        from rclpy.qos import QoSProfile, QoSReliabilityPolicy
         from sensor_msgs.msg import Imu
     except ImportError as exc:
         raise SystemExit("rclpy is not importable. Source the ROS 2 environment first.") from exc
 
     rclpy.init()
     node = Node("isaac_imu_shared_memory_bridge")
-    publisher = node.create_publisher(Imu, args.topic, qos_profile_sensor_data)
+    qos = QoSProfile(depth=2000, reliability=QoSReliabilityPolicy.RELIABLE)
+    publisher = node.create_publisher(Imu, args.topic, qos)
     reader = ImuReader()
     guard = TimestampGuard()
     published_once = False
