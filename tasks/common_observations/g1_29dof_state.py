@@ -12,6 +12,8 @@ import os
 import sys
 from multiprocessing import shared_memory
 
+from tools.imu_shared_memory_utils import ImuWriter
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -84,6 +86,7 @@ def get_robot_arm_joint_names() -> list[str]:
 from dds.dds_master import dds_manager
 _g1_robot_dds = None
 _dds_initialized = False
+_imu_writer = ImuWriter()
 
 # 观测缓存：索引张量与DDS限速（50FPS）+ 预分配缓冲
 _obs_cache = {
@@ -203,6 +206,21 @@ def get_robot_boy_joint_states(
     combined_buf[:, n:2*n].copy_(vel_buf)
     combined_buf[:, 2*n:3*n].copy_(torque_buf)
 
+    # Export the exact IMU sample consumed by DDS, using simulator time so the
+    # ROS bridge can synchronize it with the ray-caster point cloud.
+    imu_sample = None
+    if combined_buf.shape[0] > 0:
+        imu_data = get_robot_imu_data(env)
+        if imu_data.shape[0] > 0:
+            imu_sample = imu_data[0].contiguous().cpu().numpy()
+            imu_timestamp_ns = int(float(env.sim.current_time) * 1_000_000_000)
+            _imu_writer.write_sample(
+                imu_timestamp_ns,
+                imu_sample[3:7],
+                imu_sample[7:10],
+                imu_sample[10:13],
+            )
+
     # write to DDS（限速发布，避免高频CPU拷贝）
     if enable_dds and combined_buf.shape[0] > 0:
         try:
@@ -210,16 +228,14 @@ def get_robot_boy_joint_states(
             now_ms = int(time.time() * 1000)
             if now_ms - _obs_cache["dds_last_ms"] >= _obs_cache["dds_min_interval_ms"]:
                 g1_robot_dds = _get_g1_robot_dds_instance()
-                if g1_robot_dds:
-                    imu_data = get_robot_imu_data(env)
-                    if imu_data.shape[0] > 0:
-                        g1_robot_dds.write_robot_state(
-                            pos_buf[0].contiguous().cpu().numpy(),
-                            vel_buf[0].contiguous().cpu().numpy(),
-                            torque_buf[0].contiguous().cpu().numpy(),
-                            imu_data[0].contiguous().cpu().numpy(),
-                        )
-                        _obs_cache["dds_last_ms"] = now_ms
+                if g1_robot_dds and imu_sample is not None:
+                    g1_robot_dds.write_robot_state(
+                        pos_buf[0].contiguous().cpu().numpy(),
+                        vel_buf[0].contiguous().cpu().numpy(),
+                        torque_buf[0].contiguous().cpu().numpy(),
+                        imu_sample,
+                    )
+                    _obs_cache["dds_last_ms"] = now_ms
         except Exception as e:
             print(f"[g1_state] Error writing robot state to DDS: {e}")
     
