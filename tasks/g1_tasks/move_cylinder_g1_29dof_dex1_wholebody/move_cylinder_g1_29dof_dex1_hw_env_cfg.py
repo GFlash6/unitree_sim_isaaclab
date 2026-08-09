@@ -20,7 +20,7 @@ from isaaclab.sensors import ContactSensorCfg
 from . import mdp
 # use Isaac Lab native event system
 
-from tasks.common_config import  G1RobotPresets, CameraPresets  # isort: skip
+from tasks.common_config import  G1RobotPresets, CameraPresets, LidarPresets  # isort: skip
 from tasks.common_event.event_manager import SimpleEvent, SimpleEventManager
 
 # import public scene configuration
@@ -45,6 +45,7 @@ class ObjectTableSceneCfg(TableCylinderSceneCfgWH):
     contact_forces = ContactSensorCfg(prim_path="/World/envs/env_.*/Robot/.*", history_length=10, track_air_time=True, debug_vis=False)
     # 6. add camera configuration 
     front_camera = CameraPresets.g1_front_camera()
+    mid360 = LidarPresets.g1_mid360()
     left_wrist_camera = CameraPresets.left_gripper_wrist_camera()
     right_wrist_camera = CameraPresets.right_gripper_wrist_camera()
     robot_camera = CameraPresets.g1_world_camera()
@@ -74,6 +75,7 @@ class ObservationsCfg:
         robot_joint_state = ObsTerm(func=mdp.get_robot_boy_joint_states)
         robot_gipper_state = ObsTerm(func=mdp.get_robot_gipper_joint_states)
         camera_image = ObsTerm(func=mdp.get_camera_image)
+        mid360_points = ObsTerm(func=mdp.get_mid360_points)
 
         def __post_init__(self):
             """post initialization function

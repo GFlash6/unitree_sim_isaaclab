@@ -31,6 +31,9 @@ class DDSRLActionProvider(ActionProvider):
         self.dex3_dds = None
         self.inspire_dds = None
         self.run_command = None
+        self.wholebody_command_timeout_ns = int(
+            getattr(args_cli, "wholebody_command_timeout", 0.5) * 1e9
+        )
         self._setup_dds()
         self._setup_joint_mapping()
         self.policy = self.load_policy(self.policy_path)
@@ -313,7 +316,10 @@ class DDSRLActionProvider(ActionProvider):
     def compute_current_observations(self):
         command = [0,0,0,0.8]  
         run_command = self.run_command_dds.get_run_command()
-        if run_command and 'run_command' in run_command:
+        received_at_ns = int(run_command.get("received_at_monotonic_ns", 0)) if run_command else 0
+        command_age_ns = time.monotonic_ns() - received_at_ns
+        if (run_command and 'run_command' in run_command
+                and 0 <= command_age_ns <= self.wholebody_command_timeout_ns):
             run_command_data = run_command['run_command']
             
             if isinstance(run_command_data, str):
@@ -335,8 +341,6 @@ class DDSRLActionProvider(ActionProvider):
                 except (IndexError, TypeError) as e:
                     print(f"[WARNING] cannot parse run_command data: {run_command_data}, error: {e}")
             
-            self.run_command_dds.write_run_command([0.0,0,0,0.8])
-      
         # command = [0.5,0.0,0.7,0.8]
         command = torch.tensor(command, device=self.env.device, dtype=torch.float32)
         

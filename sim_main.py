@@ -47,6 +47,8 @@ parser.add_argument("--modify_camera",  action="store_true", default=False,    h
 
 # performance analysis parameters
 parser.add_argument("--step_hz", type=int, default=100, help="control frequency")
+parser.add_argument("--wholebody_command_timeout", type=float, default=0.5,
+                    help="seconds to hold the latest wholebody DDS velocity command")
 parser.add_argument("--enable_profiling", action="store_true", default=True, help="enable performance analysis")
 parser.add_argument("--profile_interval", type=int, default=500, help="performance analysis report interval (steps)")
 
@@ -497,11 +499,11 @@ def main():
                     if reset_pose_cmd is not None:
                         try:
                             reset_category = reset_pose_cmd.get("reset_category")
-                            if (args_cli.enable_wholebody_dds and (reset_category == '1' or reset_category == '2')) or (not args_cli.enable_wholebody_dds and reset_category == '1'):
+                            if reset_category == '1':
                                 print("reset object")
                                 env_cfg.event_manager.trigger("reset_object_self", env)
                                 reset_pose_dds.write_reset_pose_command(-1)
-                            elif reset_category == '2' and not args_cli.enable_wholebody_dds:
+                            elif reset_category == '2':
                                 print("reset all")
                                 env_cfg.event_manager.trigger("reset_all_self", env)
                                 reset_pose_dds.write_reset_pose_command(-1)

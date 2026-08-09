@@ -126,3 +126,5 @@ assets
 ${data}
 *.etli
 .history
+holoagent_bridge/maps
+holoagent_bridge/validation

@@ -18,7 +18,7 @@ from isaaclab.assets import ArticulationCfg
 from . import mdp
 # use Isaac Lab native event system
 
-from tasks.common_config import  G1RobotPresets, CameraPresets  # isort: skip
+from tasks.common_config import  G1RobotPresets, CameraPresets, LidarPresets  # isort: skip
 from tasks.common_event.event_manager import SimpleEvent, SimpleEventManager
 
 # import public scene configuration
@@ -44,6 +44,7 @@ class ObjectTableSceneCfg(TablePickRedblockIntoDrawerSceneCfg):
 
     # 6. add camera configuration 
     front_camera = CameraPresets.g1_front_camera()
+    mid360 = LidarPresets.g1_mid360()
     left_wrist_camera = CameraPresets.left_gripper_wrist_camera()
     right_wrist_camera = CameraPresets.right_gripper_wrist_camera()
 
@@ -76,6 +77,7 @@ class ObservationsCfg:
 
         # 3. camera image observation
         camera_image = ObsTerm(func=mdp.get_camera_image)
+        mid360_points = ObsTerm(func=mdp.get_mid360_points)
 
         def __post_init__(self):
             """post initialization function

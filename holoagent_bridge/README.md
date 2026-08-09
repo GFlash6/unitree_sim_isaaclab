@@ -14,6 +14,10 @@ conda activate unitree_sim_env
 env -u DISPLAY python sim_main.py --device cuda:0 --headless --livestream 0 --enable_cameras --task Isaac-Move-Cylinder-G129-Dex1-Wholebody --action_source dds_wholebody --robot_type g129 --enable_dex1_dds --enable_wholebody_dds
 ```
 
+Keep `DISPLAY` unset for this headless launch. A reachable X server can still
+make Vulkan initialization select the X/GLX path and fail with
+`GLXBadFBConfig`; `env -u DISPLAY` forces the verified headless path.
+
 Both `--action_source dds_wholebody` and `--enable_wholebody_dds` are required:
 the first selects the locomotion policy action provider, while the second
 creates its DDS run-command endpoint. With only the second flag, commands can
@@ -57,6 +61,15 @@ command to DDS at 20 Hz and switches to zero velocity when no new `/cmd_vel`
 message has arrived for 0.5 seconds. A one-shot publication therefore is not a
 valid sustained-motion command.
 
+The current 12-DoF locomotion policy responds weakly to both pure yaw and the
+high-yaw mixed commands produced by DWB. At `|yaw| >= 0.75 rad/s`, the bridge
+therefore replaces the planar part with measured working points: positive yaw
+uses a `linear.y=+0.3 m/s` curve and negative yaw uses a
+`linear.x=-0.3 m/s` curve. Below that threshold, ordinary planar commands pass
+through unchanged. Set `--turn-assist-speed 0` to disable the adapter, or tune
+`--turn-assist-yaw-threshold` explicitly. Stale commands always become zero
+velocity before this adjustment is considered.
+
 Terminal 6, start HoloAgent FAST-LIVO with the simulator sensor streams:
 
 ```bash
@@ -64,7 +77,8 @@ source HoloAgent/robots/unitree/scripts/init_env.sh
 ros2 run fast_livo fastlivo_mapping --ros-args \
   --params-file HoloAgent/agentic_robot/core/install/fast_livo/share/fast_livo/config/mid360_online_livo.yaml \
   --params-file HoloAgent/agentic_robot/core/install/fast_livo/share/fast_livo/config/camera_d435i.yaml \
-  --params-file holoagent_bridge/fast_livo_mid360_sim.yaml
+  --params-file holoagent_bridge/fast_livo_mid360_sim.yaml \
+  --params-file holoagent_bridge/fast_livo_mid360_mapping_sim.yaml
 ```
 
 Before starting FAST-LIVO, keep the robot stationary and require the live
@@ -113,6 +127,14 @@ ros2 service call /fast_livo/save_map fast_livo/srv/SaveMap \
   "{resolution: 0.2, destination: '/absolute/path/to/new_map_directory'}"
 python3 holoagent_bridge/prepare_reloc_map.py /absolute/path/to/new_map_directory
 ```
+
+The validated 2026-08-07 long-run candidate is
+`holoagent_bridge/maps/mid360_final_long_20260807_a/`. It contains 754
+keyframes and 1,432,144 global points. Its independently repeated save is the
+matching `_b` directory; their mapping, global-cloud, and generated-grid
+hashes are identical. When relocalizing without returning the robot to the
+map's first pose, provide `relo.initpose_prior` near the latest saved
+`mapping.txt` pose instead of leaving the default `[0, 0, 0]` prior.
 
 Start online relocalization against the configured real map while FAST-LIVO is
 still publishing `/undistort_cloud` and `/aft_mapped_to_init`:
@@ -181,3 +203,20 @@ A real run should report `mid360_type=MultiMeshRayCaster`, non-empty `mid360_mes
 Do not run HoloAgent `g1_move/pubvel` against the simulation. That executable targets the Unitree hardware SDK. Use `holoagent_bridge/cmd_vel_to_unitree_dds.py` for simulation.
 
 Use `/usr/bin/python3` for ROS2 bridge processes. ROS Humble in this environment is built for Python 3.10; the default conda Python is not ABI-compatible with `rclpy`.
+
+If `nav2_msgs` was previously built with conda Python, rebuild its Python type support for ROS Humble:
+
+```bash
+cd HoloAgent/agentic_robot/thirdparty
+source /opt/ros/humble/setup.bash
+colcon build --base-paths src/navigation2-humble --packages-select nav2_msgs \
+  --build-base build --install-base install --symlink-install \
+  --cmake-clean-cache --cmake-args \
+  -DPython3_EXECUTABLE=/usr/bin/python3 -DPYTHON_EXECUTABLE=/usr/bin/python3
+```
+
+Install the HTTP bridge dependencies into the same Python 3.10 environment:
+
+```bash
+/usr/bin/python3 -m pip install --user 'fastapi<1' 'uvicorn<1' 'anyio<4'
+```

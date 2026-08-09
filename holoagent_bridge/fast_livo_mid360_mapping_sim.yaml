@@ -1,0 +1,18 @@
+/**:
+  ros__parameters:
+    common:
+      map_save_path: "/home/ubuntu/agents/unitree_sim_isaaclab/holoagent_bridge/maps/mid360_sim_20260806_102736/"
+
+    pcd_save:
+      pcd_save_en: true
+      colmap_output_en: false
+      interval: 2
+      filter_size_pcd: 0.04
+
+    loop:
+      loop_closure_enable_flag: false
+
+    mapping:
+      keyframeAddingDistThreshold: 0.05
+      keyframeAddingAngleThreshold: 0.01
+      enable_gtsam: false

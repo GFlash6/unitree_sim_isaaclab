@@ -6,6 +6,7 @@ Specialized in receiving the run command
 """
 
 import threading
+import time
 from typing import Any, Dict, Optional
 from dds.dds_base import DDSObject
 from unitree_sdk2py.core.channel import ChannelSubscriber
@@ -61,7 +62,8 @@ class RunCommandDDS(DDSObject):
         """Process the subscribe data"""
         try:
             cmd_data = {
-                "run_command": msg.data
+                "run_command": msg.data,
+                "received_at_monotonic_ns": time.monotonic_ns(),
             }
             self.output_shm.write_data(cmd_data)
         except Exception as e:
@@ -87,7 +89,8 @@ class RunCommandDDS(DDSObject):
         try:
             # prepare the reset pose data
             cmd_data = {
-                "run_command":flag_category
+                "run_command":flag_category,
+                "received_at_monotonic_ns": time.monotonic_ns(),
             }
             
             # write the reset pose data to the shared memory
