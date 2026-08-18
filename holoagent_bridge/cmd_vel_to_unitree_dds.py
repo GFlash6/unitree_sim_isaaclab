@@ -34,6 +34,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--max-y", type=positive_float, default=0.5, help="Absolute y velocity limit in m/s.")
     parser.add_argument("--max-yaw", type=positive_float, default=1.57, help="Absolute yaw velocity limit in rad/s.")
     parser.add_argument(
+        "--min-effective-forward",
+        type=nonnegative_float,
+        default=0.6,
+        help="Measured minimum effective positive-x command for this policy; zero disables it.",
+    )
+    parser.add_argument(
         "--turn-assist-speed",
         type=nonnegative_float,
         default=0.3,
@@ -61,6 +67,8 @@ def command_from_twist(msg, args: argparse.Namespace, now: float, last_stamp: fl
     x = clamp(msg.linear.x, args.max_x)
     y = clamp(msg.linear.y, args.max_y)
     yaw = clamp(msg.angular.z, args.max_yaw)
+    if 0.0 < x < args.min_effective_forward:
+        x = min(args.min_effective_forward, args.max_x)
     if abs(yaw) >= args.turn_assist_yaw_threshold and args.turn_assist_speed > 0.0:
         if yaw > 0.0:
             x = 0.0

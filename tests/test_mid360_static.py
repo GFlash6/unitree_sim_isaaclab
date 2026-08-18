@@ -26,6 +26,21 @@ def test_lidar_config_is_exported() -> None:
     assert "{ENV_REGEX_NS}/Object" in cfg
     assert "paths.split(\",\")" in cfg
     assert "MID360_MESH_PRIM_PATHS" in cfg
+    assert cfg.count("exclude_invisible_meshes=True") == 4
+    assert cfg.count("exclude_collision_only_meshes=True") == 4
+    assert cfg.count("max_mesh_extent=") == 4
+    assert "Room/Assets/gate/door" not in cfg
+
+    ray_caster_dir = ROOT.parent / "IsaacLab/source/isaaclab/isaaclab/sensors/ray_caster"
+    ray_cfg = (ray_caster_dir / "multi_mesh_ray_caster_cfg.py").read_text(encoding="utf-8")
+    ray_caster = (ray_caster_dir / "multi_mesh_ray_caster.py").read_text(encoding="utf-8")
+    assert "exclude_invisible_meshes" in ray_cfg
+    assert "exclude_collision_only_meshes" in ray_cfg
+    assert "max_mesh_extent" in ray_cfg
+    assert "excluded_prim_path_suffixes" in ray_cfg
+    assert "ComputeVisibility" in ray_caster
+    assert "HasAPI(UsdPhysics.CollisionAPI)" in ray_caster
+    assert "np.ptp(mesh.vertices" in ray_caster
 
     init_py = source("tasks/common_config/__init__.py")
     assert "LidarPresets" in init_py
@@ -66,6 +81,8 @@ def test_sim_main_exports_mid360_every_loop() -> None:
     sim_main = source("sim_main.py")
     assert "from tasks.common_observations.mid360_state import get_mid360_points" in sim_main
     assert "controller.step()\n                get_mid360_points(env)" in sim_main
+    assert "camera sensors disabled before environment creation via --no_render" in sim_main
+    assert "env_cfg.observations.policy.camera_image = None" in sim_main
 
 
 def test_wholebody_tasks_use_default_multi_mesh_lidar() -> None:

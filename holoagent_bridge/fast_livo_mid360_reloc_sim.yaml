@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     relo:
-      priorDir: "/home/ubuntu/agents/unitree_sim_isaaclab/holoagent_bridge/maps/mid360_sim_20260806_102736/"
+      priorDir: "/home/ubuntu/agents/unitree_sim_isaaclab/holoagent_bridge/maps/mid360_filtered_long_20260810_a/"
       cloudTopic: "/undistort_cloud"
       poseTopic: "/aft_mapped_to_init"
       searchDis: 3.0

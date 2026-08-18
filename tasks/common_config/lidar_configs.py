@@ -26,10 +26,37 @@ def _mesh_prim_paths(fallback: str | None = None) -> list[str | MultiMeshRayCast
 def _default_mesh_prim_paths() -> list[MultiMeshRayCasterCfg.RaycastTargetCfg]:
     target = MultiMeshRayCasterCfg.RaycastTargetCfg
     return [
-        target(prim_expr="{ENV_REGEX_NS}/Room", is_shared=True, track_mesh_transforms=False),
-        target(prim_expr="{ENV_REGEX_NS}/PackingTable_1", is_shared=True, track_mesh_transforms=False),
-        target(prim_expr="{ENV_REGEX_NS}/PackingTable_2", is_shared=True, track_mesh_transforms=False),
-        target(prim_expr="{ENV_REGEX_NS}/Object", track_mesh_transforms=True),
+        target(
+            prim_expr="{ENV_REGEX_NS}/Room",
+            is_shared=True,
+            track_mesh_transforms=False,
+            exclude_invisible_meshes=True,
+            exclude_collision_only_meshes=True,
+            max_mesh_extent=260.0,
+        ),
+        target(
+            prim_expr="{ENV_REGEX_NS}/PackingTable_1",
+            is_shared=True,
+            track_mesh_transforms=False,
+            exclude_invisible_meshes=True,
+            exclude_collision_only_meshes=True,
+            max_mesh_extent=10.0,
+        ),
+        target(
+            prim_expr="{ENV_REGEX_NS}/PackingTable_2",
+            is_shared=True,
+            track_mesh_transforms=False,
+            exclude_invisible_meshes=True,
+            exclude_collision_only_meshes=True,
+            max_mesh_extent=10.0,
+        ),
+        target(
+            prim_expr="{ENV_REGEX_NS}/Object",
+            track_mesh_transforms=True,
+            exclude_invisible_meshes=True,
+            exclude_collision_only_meshes=True,
+            max_mesh_extent=2.0,
+        ),
     ]
 
 

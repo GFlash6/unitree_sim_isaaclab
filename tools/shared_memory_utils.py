@@ -21,11 +21,23 @@ def get_shm_name(image_name: str) -> str:
     """Get shared memory name for a specific image"""
     return f"isaac_{image_name}_image_shm"
 
-SHM_SIZE_PER_IMAGE = 640 * 480 * 3 + 128  # ~1MB per image + header + buffer
+SHM_SIZE_PER_IMAGE = 640 * 480 * 4 + 128  # RGB uint8 or depth float32
 
 # Backward compatibility
 SHM_NAME = "isaac_multi_image_shm"  # Kept for backward compatibility
 SHM_SIZE = SHM_SIZE_PER_IMAGE * 3   # Kept for backward compatibility
+
+
+def _open_shared_memory_for_read(name: str) -> shared_memory.SharedMemory:
+    """Open without making this reader responsible for unlinking the segment."""
+    try:
+        return shared_memory.SharedMemory(name=name, track=False)
+    except TypeError:  # Python < 3.13
+        from multiprocessing import resource_tracker
+
+        shm = shared_memory.SharedMemory(name=name)
+        resource_tracker.unregister(shm._name, "shared_memory")
+        return shm
 
 # define the simplified header structure
 class SimpleImageHeader(ctypes.LittleEndianStructure):  # Use little-endian for cross-platform compatibility
@@ -37,7 +49,7 @@ class SimpleImageHeader(ctypes.LittleEndianStructure):  # Use little-endian for 
         ('channels', ctypes.c_uint32),     # number of channels
         ('image_name', ctypes.c_char * 16), # image name (e.g., 'head', 'left', 'right')
         ('data_size', ctypes.c_uint32),    # data size
-        ('encoding', ctypes.c_uint32),     # 0=raw BGR, 1=JPEG
+        ('encoding', ctypes.c_uint32),     # 0=raw uint8, 1=JPEG, 2=raw float32
         ('quality', ctypes.c_uint32),      # JPEG quality (valid if encoding=1)
     ]
 
@@ -116,7 +128,14 @@ class MultiImageWriter:
                         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
                 # get the image information
-                height, width, channels = image.shape
+                if image.ndim == 2:
+                    height, width = image.shape
+                    channels = 1
+                elif image.ndim == 3:
+                    height, width, channels = image.shape
+                else:
+                    print(f"[MultiImageWriter] Unsupported shape for {image_name}: {image.shape}")
+                    continue
 
                 # 准备头部
                 header = SimpleImageHeader()
@@ -127,7 +146,11 @@ class MultiImageWriter:
                 header.image_name = image_name.encode('utf-8')[:15].ljust(16, b'\x00')  # truncate and pad to 16 bytes
 
                 # 计算数据
-                if self._enable_jpeg:
+                if image.dtype == np.float32:
+                    data_bytes = image.tobytes()
+                    header.encoding = 2
+                    header.quality = 0
+                elif self._enable_jpeg:
                     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(self._jpeg_quality)]
                     ok, buffer = cv2.imencode('.jpg', image, encode_params)
                     if not ok:
@@ -204,7 +227,7 @@ class MultiImageReader:
                 # Open shared memory if not already open
                 if shm_name not in self.shms:
                     try:
-                        self.shms[shm_name] = shared_memory.SharedMemory(name=shm_name)
+                        self.shms[shm_name] = _open_shared_memory_for_read(shm_name)
                     except FileNotFoundError:
                         continue  # Skip if shared memory doesn't exist
 
@@ -235,12 +258,15 @@ class MultiImageReader:
                     if image is None:
                         continue
                 else:  # RAW
-                    image = np.frombuffer(payload, dtype=np.uint8)
+                    dtype = np.float32 if header.encoding == 2 else np.uint8
+                    image = np.frombuffer(payload, dtype=dtype)
                     expected_size = header.height * header.width * header.channels
                     if image.size != expected_size:
                         print(f"[MultiImageReader] Data size mismatch for {image_name}: expected {expected_size}, got {image.size}")
                         continue
-                    image = image.reshape(header.height, header.width, header.channels)
+                    shape = (header.height, header.width) if header.channels == 1 else (
+                        header.height, header.width, header.channels)
+                    image = image.reshape(shape)
 
                 # Cache and return
                 self.buffer[image_name] = image
@@ -290,7 +316,7 @@ class MultiImageReader:
         """Read a single specific image from its dedicated shared memory.
 
         Args:
-            image_name: Name of the image to read ("head", "left", or "right")
+            image_name: Shared-memory image name, for example "head" or "head_depth".
 
         Returns:
             np.ndarray: The requested image array, or None if not found or error
@@ -301,7 +327,7 @@ class MultiImageReader:
             # Open shared memory if not already open
             if shm_name not in self.shms:
                 try:
-                    self.shms[shm_name] = shared_memory.SharedMemory(name=shm_name)
+                    self.shms[shm_name] = _open_shared_memory_for_read(shm_name)
                 except FileNotFoundError:
                     print(f"[MultiImageReader] Shared memory {shm_name} not found")
                     return None
@@ -331,12 +357,15 @@ class MultiImageReader:
                 if image is None:
                     return None
             else:  # RAW
-                image = np.frombuffer(payload, dtype=np.uint8)
+                dtype = np.float32 if header.encoding == 2 else np.uint8
+                image = np.frombuffer(payload, dtype=dtype)
                 expected_size = header.height * header.width * header.channels
                 if image.size != expected_size:
                     print(f"[MultiImageReader] Data size mismatch for {image_name}: expected {expected_size}, got {image.size}")
                     return None
-                image = image.reshape(header.height, header.width, header.channels)
+                shape = (header.height, header.width) if header.channels == 1 else (
+                    header.height, header.width, header.channels)
+                image = image.reshape(shape)
 
             # Update buffer and timestamp
             self.buffer[image_name] = image
@@ -426,4 +455,4 @@ class SharedMemoryReader:
         return images.get('head') if images else None
     
     def close(self):
-        self.multi_reader.close() 
+        self.multi_reader.close()

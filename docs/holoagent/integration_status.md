@@ -1,6 +1,6 @@
 # HoloAgent–IsaacLab 集成主线状态
 
-更新日期：2026-08-08
+更新日期：2026-08-10
 
 ## 目标与判定原则
 
@@ -22,12 +22,12 @@
 | 1. 仿真 MID360 真实性与数据链路 | 已完成 | 真实 MultiMeshRayCaster 点云已稳定进入 ROS2，坐标系与帧新鲜度已修正 |
 | 2. IMU 与时间同步 | 已完成 | 真实机身 IMU 已进入 ROS2，与 LiDAR 使用同一仿真源时间并通过同步验证 |
 | 3. FAST-LIVO 实时定位与建图前端 | 已完成 | XYZ-only LiDAR+IMU LIO 已跑通，并与独立 GT 完成动态精度验证 |
-| 4. 地图保存、补全与地图质量 | 已完成目标区域长图，稳定性待加强 | 754-keyframe 长图已连续保存两份并通过结构、哈希、栅格和净空检查；全场景扩展与压力保存仍待完成 |
+| 4. 地图保存、补全与地图质量 | 已完成当前物理可达范围最大图，稳定性待加强 | 无门场景新图含 4329 keyframe、62.33 m 轨迹并覆盖 4.79 m × 9.92 m；封闭结构门后的房间仍不可达 |
 | 5. 在线重定位 | 已完成目标区域闭环，稳定性待加强 | 754-keyframe 地图可持续产生重定位位姿，已完成 GT 精度、初始 NDT 和速度输出验证 |
 | 6. Nav2 地图与代价地图 | 已完成目标区域闭环 | 最终长图栅格已用于真实 Nav2；轨迹全部位于同一自由空间连通域，最小净空 0.552 m |
 | 7. 定位输出接入 Nav2 | 已完成 | `/pose`、TF 和真实估计速度已接入 Nav2，所有生命周期节点可进入 active |
 | 8. Nav2 到 Unitree 控制闭环 | 已完成目标区域闭环，策略边界待加强 | 1.834 m 新地图 action 与可视化四航点闭环均成功；低速死区、狭窄空间和原地转向能力仍有限制 |
-| 9. HoloAgent 主 Agent 接入 | 部分完成 | AgentOS→HTTP→ROS→Nav2 调用路径已确认，Python 3.10 ABI 和 HTTP/topic 接线已通过；待全栈真实 action 复测 |
+| 9. HoloAgent 主 Agent 接入 | 已完成目标区域闭环，泛化待加强 | Qwen 真实规划→skill→SAM3/SigLIP/HMSG→Nav2→DDS 已驱动机器人真实运动；单视角语义图与全场景泛化仍待扩展 |
 | 10. 稳定性、测试与版本管理 | 部分完成 | 定向测试通过；30 分钟 soak、原生保存压力测试和版本整理尚未完成 |
 
 当前端到端数据流为：
@@ -61,6 +61,8 @@ IsaacLab torso IMU ─────┘                                           
   - `PackingTable_1`
   - `PackingTable_2`
   - `Object`
+- `MultiMeshRayCaster` 已在射线源头排除计算后不可见、碰撞专用，以及包围盒非有限或异常过大的 mesh；这不是点云发布后的结果裁剪。
+- 当前各目标分别设置包围盒上限：`Room=260 m`、`PackingTable=10 m`、`Object=2 m`；若一个目标的 mesh 全部被排除，传感器会显式告警并跳过该目标。
 - 每帧约 11520 个真实 ray hit 点。
 - `sim_main.py` 从 `sensor.data.ray_hits_w[0]` 读取有限点，并把 world-frame ray hit 转换到 MID360 sensor frame。
 - 点云通过 shared memory 传递，使用序号锁和纳秒源时间戳，避免读取半写入帧。
@@ -72,6 +74,7 @@ IsaacLab torso IMU ─────┘                                           
 - 修复早期点云近似 world frame、却被标记为传感器 frame 的坐标系错误。
 - 修复仅依赖时间戳以及可能重复旧点云的问题。
 - 移除 synthetic/fake cloud 调试路径作为运行时输入的可能性。
+- 修复不可见天花板/相机辅助体、collision proxy 和异常包围盒参与 raycast、在点云及栅格中形成弧形假边界的问题；可见房间、桌体和任务物体仍参与真实射线命中。
 
 ## 正确性证据
 
@@ -194,10 +197,13 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 
 ## 当前状态
 
-**已完成目标导航区域长图，稳定性待加强。** 地图结构、加载、后处理、同会话连续保存和目标区域质量门均已通过；全场景扩展、更多轮压力保存和正式 soak 尚未完成。
+**已完成当前物理可达范围最大新图，稳定性待加强。** 无门通道、下层大房间和上层可达前厅已经真实遍历并保存；场景原生封闭结构门后的房间不能在不修改场景或伪造位姿的前提下进入。地图结构、后处理和 Nav2 栅格质量门已通过，最终重定位/Nav2 运行验收、更多轮压力保存和正式 soak 尚未完成。
 
 ## 已完成内容
 
+- 当前最大可达范围主候选：`holoagent_bridge/maps/mid360_full_reachable_20260810_211845_b/`；同会话较早保存副本为对应的 `_a/` 目录。
+- 主候选包含 4329 行 `mapping.txt`、`optimized_poses.txt` 和 `keyframe_pose.txt`，以及 4329 个连续编号的 keyframe PCD/SCD；重建后的 `cloudGlobal.pcd` 含 8,292,335 点。
+- 主候选已生成 224 × 372、0.05 m/cell 的 `grid_map.pgm/yaml` 和 `map_topdown.png`。
 - 早期短链路验证地图：`holoagent_bridge/maps/mid360_sim_20260806_102736/`。
 - 当前主验证地图：`holoagent_bridge/maps/mid360_final_long_20260807_a/`；同会话重复保存副本为对应的 `_b/` 目录。
 - 当前长图每份包含：
@@ -241,7 +247,7 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 - 最终长图累计 XY 轨迹长度 9.506 m，轨迹边界约为 `[-0.153,-0.002]..[0.959,1.972]`。
 - 754 个轨迹位姿全部位于同一自由空间连通域；轨迹最小障碍净空 0.552 m，5% 分位净空 0.743 m。
 - 栅格包含 1725 个占用格、18797 个自由格和 15738 个未知格；人工俯视检查未发现轨迹区域明显双墙或断层。
-- `map_topdown.png` 会投影所有高度且不做体素去重；其中约 65% 点的 `z < -0.5 m`，房间内部密集蓝点主要是累计地面回波，不代表 Nav2 障碍。Nav2 栅格仍使用 `min_obstacle_z=-0.3 m` 过滤地面。
+- `map_topdown.png` 会投影所有高度且不做体素去重；其中约 65% 点的 `z < -0.5 m`，房间内部密集蓝点主要是累计地面回波，不代表 Nav2 障碍。当前静态栅格生成器只把 `-0.8 m <= z <= 0.3 m` 的端点标为占据，其中 `0.3 m` 上限是当前明确采用的配置。
 
 - 早期短地图三类 keyframe 数据数量一致，索引从 0 到 63 连续。
 - 连续保存复测的两份 `cloudGlobal.pcd` SHA-256 相同，文件大小均为 96203 bytes；`prepare_reloc_map.py --rebuild-global` 对两份目录均成功。
@@ -252,7 +258,22 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
   - Z：0.031 m
 - 轨迹最终回到接近起点，净位移约 0.008 m。
 
-以上 64-keyframe 数据描述的是早期短地图。当前 754-keyframe 地图已取代它成为目标区域主验证地图，但仍不是完整仓库全场景地图。
+以上 64-keyframe 数据描述的是早期短地图。754-keyframe 地图随后成为目标区域主验证地图；2026-08-10 的 4329-keyframe 最大可达范围新图现为最新地图候选。
+
+### 全场景重建进展（2026-08-10）
+
+- 已将不可见、碰撞专用和异常包围盒 Prim 的排除下沉到 MID360 raycast 源头，并以 CPU 物理仿真重新启动真实传感器链路；GPU 物理启动曾因无法分配 640 MiB PhysX contact-pair buffer 发生真实 OOM，该次运行未作为建图成功结果。
+- 新一轮真实同步检查通过：100 帧 LiDAR、103 帧 IMU，实测约 49.01 Hz / 50.00 Hz，时间重叠 2.02 s，最近时间戳偏差 0；报告为 `holoagent_bridge/validation/lidar_imu_sync_full_map_20260810.json`。
+- FAST-LIVO 已在该真实数据上初始化并持续运行，观测到的稳定残差约为 0.0049；没有使用 GT 位姿替代 LIO 输入。
+- 曾验证实验性玻璃门具有真实 PhysX 转轴和角度响应，但机器人推门试跑未穿过门洞：GT 最大 `y=1.898 m`，门墙约为 `y=2.255 m`，因此不能判为推门成功，也没有据此保存全图。
+- 当前磁盘中的最终场景配置已切换到 `small_warehouse_no_door.usda`，其中 `/Lab/Assets/gate/door` 为 `active=false`。这会在下一次干净重启后提供开放通道；此前已经运行的场景仍保留旧门状态，不能热更新代表新配置。
+- 已在干净 CPU 物理仿真中通过新一轮同步门禁：LiDAR 178 帧、35.12 Hz，IMU 252 帧、50.00 Hz，重叠 5.02 s，最近时间戳偏差 0；报告为 `lidar_imu_sync_full_map_session_20260810.json`。
+- 机器人真实穿过 `small_warehouse_no_door.usda` 的开放门洞，覆盖下层大房间、无门通道和上层可达前厅；独立 GT 轨迹 52.56 m，范围约为 `x=[-5.284,-0.168]`、`y=[-5.434,4.316]`。
+- 上层前厅的原生结构门和西南桌台边界均通过持续命令与 GT 毫米级响应确认是物理障碍；没有使用 reset、GT 写位姿或热修改场景穿越。
+- 同会话连续保存 `_a/_b` 两份地图，分别含 4328/4329 组内部一致的 pose/PCD/SCD；两份均通过 `prepare_reloc_map.py --rebuild-global`，第二份保存间新增 1 个静止 keyframe，因此不声称两份哈希相同。
+- 主候选 LIO 轨迹长 62.33 m，覆盖 4.79 m × 9.92 m；4329 个轨迹栅格全部为自由空间并属于同一自由空间连通域，最小轨迹清障半径 0.30 m。
+- 主候选栅格含 6423 个占用格、30229 个自由格和 46676 个未知格；人工检查可见下层房间、开放门洞和上层前厅结构连续，远距离射线扇区位于未知区且不影响轨迹连通域。
+- 完整汇总与哈希：`holoagent_bridge/validation/full_reachable_map_summary_20260810.json`。
 
 ## 遗留问题
 
@@ -355,7 +376,7 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
   - origin：约 `[-3.899, -3.057, 0]`
 - local/global obstacle layer 使用真实 `/reloc_body_cloud`。
 - local/global costmap 的障碍最低高度从 -0.8 m 调整到 -0.3 m，以排除 base_link 下方约 1.1 m 的地面回波。
-- `generate_nav2_map.py` 的静态障碍最低高度也从 -0.8 m 同步为 -0.3 m；此前静态/实时阈值不一致是“短地图无 >1 m 安全路径”的直接原因。
+- `generate_nav2_map.py` 当前使用独立的静态占据高度带 `[-0.8 m, 0.3 m]`；只有该高度带内的点云端点会标为占据，`0.3 m` 上限是有意设置。它与实时 costmap 的传感器坐标高度阈值服务于不同输入，不再声称两者数值同步。
 - 修正后的诊断地图保存在 `holoagent_bridge/maps/mid360_sim_20260806_102736_ground_filtered_20260807/`，原地图未被覆盖。
 - 以 0.50 m 净空做距离变换后，复位点所在连通区域最长路径由约 0.71 m 增长到约 4.75 m；已验证目标路径的最小静态净空约 0.68 m。
 - 复位后的初始位置上，机器人所在 local-costmap 栅格代价实测为 0；附近桌体和物体障碍仍保留。
@@ -635,7 +656,9 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 
 ## 当前状态
 
-**部分完成。** 主 Agent 的调用路径、Python ABI、HTTP 入口和 ROS topic 转发已打通；尚未在全量 IsaacLab/FAST-LIVO/Nav2 运行栈上由 AgentOS skill 重复完成真实 action。
+**已完成目标区域真实闭环，泛化与长时稳定性待加强。** 主 Agent 已在完整 IsaacLab/FAST-LIVO/online_relo/Nav2 运行栈上，通过真实 Qwen 规划和注册 skill 驱动机器人运动；当前语义图只覆盖一个实时 RGB-D 视角，不能外推为完整仓库语义导航能力。
+
+正式主线现为 `holoagent_agent.py`：自然语言任务 → Qwen DAG → 结构校验 → `sem-nav-skill` / `rel-move-skill` / `arm-skill` → HTTP/ROS。语义导航继续进入 SAM3/SigLIP/HMSG 查询，再由 Nav2 和 DDS 控制机器人。`g1chat_node.py` 仅作为可选语音输入组件，不再定义 Agent 主线。
 
 ## 已确认内容
 
@@ -645,21 +668,56 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 - 实际上层路径为：AgentOS `sem-nav-skill` / `rel-move-skill` → `robot_bridge` HTTP → `/chat_loc_pub` / `/relative_nav` → `/object_pose` → `nav_executor` 的 `BasicNavigator.goToPose()` → `/navigate_to_pose`。
 - thirdparty `nav2_msgs` 已用 `/usr/bin/python3` 重建，Python 3.10 下 `NavigateToPose` typesupport 和 `BasicNavigator` 导入成功。
 - AgentOS 两个导航脚本已与 bridge 的 `{"cmd": ...}` 协议对齐；真实 HTTP 请求均返回 200，ROS 端分别收到 `1.0,0.0,90` 和 `1F,lab,charger`。
+- 正式 Agent 入口已复用长指令 DAG 的规划、依赖校验、并发调度和监控产物，并增加注册 skill 参数校验与导航终态等待。
+- Qwen API 使用环境变量 `QWEN_API_KEY`。不存在名为 `qwen3.8plus` 的可调用模型；`qwen3.8-max-preview` 对当前 API key 实际返回 403，因此所有入口默认统一到已真实调用成功的 `qwen3.7-plus`，不把无权限或不存在的模型名当成已接通。
+- 语义感知使用真实 SAM3 checkpoint 与真实 SigLIP 图文特征：
+  - SAM3：`~/.cache/modelscope/models/facebook--sam3/snapshots/master/sam3.pt`，3,450,062,241 bytes。
+  - SigLIP：`~/.cache/modelscope/models/timm--ViT-SO400M-14-SigLIP-384/snapshots/master/open_clip_model.safetensors`，3,511,918,424 bytes；从 ModelScope 本地快照加载，不依赖 Hugging Face 在线下载。
+- `isaac_live_semantic_map.py` 已从真实同步 RGB、depth 和 camera pose 生成 76,800 个地图点、9 个 SAM3 实例及 `[9,1152]` 的有限归一化 SigLIP 特征；HMSG 图包含 1 floor、1 room、1 view、9 objects。
+- 修复 IsaacLab camera RGB 已随机器人更新但 `Camera.data.pos_w/quat_w_ros` 未更新的问题：camera 配置现在启用 `update_latest_camera_pose=True`；实测机器人移动约 0.517 m 时相机位姿同步移动约 0.522 m，RGB-D 外参保持稳定。
+- 连续在线建图 `sam3_siglip_real_v2` 已从实时 RGB-D-pose 流处理至 2912 帧并正常 finalize：checkpoint 含 1,971,308 个有限地图点、16 组有限的 `[1,1152]` SigLIP 实例特征，并输出 15 个对象 OBB 点云。该产物证明连续输入路径和实例融合真实运行，不是空 checkpoint；本轮 Agent 闭环仍查询经过独立核验的 9-object HMSG 图。
+- `hmsg_query_server.py` 从真实 HMSG/SigLIP 特征查询对象，使用实时 Isaac root pose 与 `/pose` 对齐固定场景目标；空查询、陈旧位姿、无目标和低分结果均失败，不发布占位目标。
+- `semantic_goal_node.py` 只在 HMSG 返回有限目标时发布带朝向和安全距离的 `/object_pose`；查询、位姿或数据失败时发布 `nav_failed`，不伪造 `nav_finish`。
 - `nav_executor` 已能在 Python 3.10 下启动并加载 `unitree` signal registry，不再因默认 `robot_name=g1` 落入空 registry。
 - 成功仍保持 `nav_finish`；取消和失败现分别上报 `nav_canceled` / `nav_failed`。
+- `struck` 是 Nav2 恢复过程告警而非 action 终态；Agent 现在继续等待真实 `nav_finish`、`nav_failed`、`nav_canceled` 或超时取消，避免把仍在执行的恢复误判为完成或失败。
 - `robot_bridge` 的 `/health` 已真实返回 200，关闭时 ROS spin 线程可干净退出，不再 native abort。
+
+## 真实闭环证据（2026-08-10）
+
+- 干净验收任务：`13号机器人使用语义导航前往 yellow plastic crate 附近`；任务开始前上一动作已停止，预采样 GT 稳定。
+- `qwen3.7-plus` 真实返回单节点 DAG：`sem-nav-skill`，target=`current,current,yellow plastic crate`。
+- HMSG/SigLIP 真实查询选择对象 `0_0_0`，score=`0.17875048964828216`；`current` 是单楼层/单房间运行上下文标记，不是伪造房间名。
+- Agent 节点从 `01:01:31.905` 执行到 `01:01:35.942`，耗时 4.036 s；最终收到 Nav2 的真实 `nav_finish`，monitor 和 execution result 均为 completed/passed。
+- 同一任务期间 `/cmd_vel` 持续出现非零控制，观测范围包括 `linear.x=0.125..0.25 m/s`、`angular.z=0.16..0.307 rad/s`。
+- 独立 Isaac root GT 从 `(-3.555748,-2.745847)` 变化到 `(-3.357859,-3.080939)`，净 XY 位移 `0.3891615 m`；GT 只用于事后验收，没有进入 Qwen、SAM3、SigLIP、HMSG、定位或控制输入。
+- Agent 原始产物：`HoloAgent/agentic_robot/agentOS/task_runs/single_robot_20260810_010119_809856/`；独立验收汇总：`holoagent_bridge/validation/agent_semantic_yellow_crate_summary_20260810.json`。
+- 历史失败仍按失败保留：Qwen 无合法 JSON、陈旧 `/pose`、TF 时间轴回退、Nav2 recovery/取消均未被改写为成功。
+- Agent 执行前的检查现明确命名为“DAG 静态校验”，只检查依赖和串行约束；它不是模拟运动，也不作为物理成功证据。物理成功必须同时满足真实终态和独立 GT 运动证据。
+
+### IsaacLab GUI 五段长程演示（2026-08-10 15:04）
+
+- 在 X11 `:10.0` 上真实启动 Isaac Sim 5.1 原生窗口，同时启动 RViz；MID360、IMU、RGB-D、FAST-LIVO、online_relo、Nav2、DDS 和 Agent 全程在线。
+- Qwen 将自然语言拆成五个严格串行节点：blue crate 语义导航 → 后退 0.7 m/转向 180° → yellow crate 语义导航 → 后退 0.6 m/转向 180° → packing table 语义导航。
+- 五个节点均收到各自真实 `nav_finish`，耗时依次为 33.707、60.840、43.763、62.376、56.837 s；总物理执行 wall time 257.557 s，execution result 为 passed。
+- 独立 Isaac GT 共 2106 帧、源仿真时间 42.10 s，全部有限且时间戳严格递增；累计 XY 轨迹约 7.820 m（排除小于 1 mm 的单帧数值抖动），最大离起点 0.817 m，首尾净位移 0.402 m，展开航向覆盖 8.767 rad。
+- 结束后控制中心终态为 `nav_finish`，DDS 输出回到 `[0,0,0,0.8]`。GT 只用于事后验收。
+- 正式产物：`HoloAgent/agentic_robot/agentOS/task_runs/single_robot_20260810_145919_760629/`；GT：`holoagent_bridge/validation/ground_truth_agent_long_demo_final_20260810.txt`；汇总：`holoagent_bridge/validation/agent_long_demo_summary_20260810.json`。
+- 演示前两次未完成运行按失败保留：一次缺少 `relative_nav_node`，一次触发已知末端原地转向能力边界；均超时取消，未改写为成功。
 
 ## 当前问题
 
 - Python 3.10 `nav2_msgs` 是当前工作区生成产物，干净环境需按运行说明重建；`robot_bridge` 同时需在 Python 3.10 中安装 FastAPI/uvicorn。
-- 底层真实 action 已成功，但本轮没有启动完整仿真、定位与 Nav2 运行栈，因此还缺 AgentOS skill 发起真实目标后的 feedback/result 证据。
-- 尚未验证重定位丢失和 Agent 超时语义；当前已覆盖成功、失败和取消的终态上报代码路径。
+- 当前用于在线查询的 HMSG 是单个实时 RGB-D 视角生成的目标区域图；连续 SAM3/SigLIP OVO checkpoint 已生成，但尚未完成从该 checkpoint 到多房间 HMSG 的转换和闭环查询，因此不能外推为完整仓库语义导航能力。
+- SigLIP 当前相似度门限 `0.1` 是本场景运行门，尚未做开放集校准；已知目标可查询，不应把未知文本的一次最高分直接解释为可靠识别。
+- 尚未实测重定位丢失后的 Agent 行为和 120 s 超时取消；成功、失败、恢复告警和主动取消路径已有真实运行证据。
+- Nav2 `xy_goal_tolerance=0.5 m` 会让已在容差内的语义请求无运动即合法完成；因此验收必须同时查看 GT，不能只看 `nav_finish`。
 
 ## 下一步
 
-1. 启动完整仿真、定位和 Nav2 栈，用 AgentOS skill 发送真实导航目标并归档 feedback/result。
-2. 真实验证任务取消、失败、重定位丢失和停车安全路径。
-3. 为 Agent 超时补充明确的取消与终态上报语义。
+1. 将已完成的连续 RGB-D-Pose OVO checkpoint 转成多视角 HMSG，验证跨位置对象查询和导航。
+2. 实测重定位丢失与 120 s Agent 超时取消，归档停车和终态证据。
+3. 校准 SigLIP 开放集门限，并为未知目标建立明确拒绝集。
 
 ## 完成判据
 
@@ -692,6 +750,10 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 - 当前定向验证结果：
   - 父仓 `tests/`：81 passed。
   - HoloAgent bridge 静态集成测试：30 passed。
+  - 本轮 RGB-D 位姿、语义目标数学与 bridge 定向回归：34 passed。
+  - SAM3/SigLIP 真实模型装载和失败语义：5 passed。
+  - HMSG 坐标变换：1 passed。
+  - Agent skill 调度、终态等待、超时取消和 Qwen JSON 提取：6 passed。
   - Nav2 静态地图生成测试：3 passed。
   - FAST-LIVO 定向 CTest：4/4 passed。
   - 相关 Python 文件编译检查通过。
@@ -720,12 +782,13 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 
 # 当前推荐推进顺序
 
-1. **用主 Agent 完成真实 action 复测**：ABI 与 AgentOS→HTTP→ROS 调用路径已通，下一步在全栈运行时归档 feedback、result、取消和失败。
-2. **收紧容差并补测控制边界**：量化 0.5 m 目标容差、低速组合命令死区、40 s wall-time 窗口和高 yaw 曲线适配边界。
-3. **补测狭窄空间安全边界**：确认约 0.3 m 的终点曲线位移是否可接受；如不可接受，替换或重新训练支持原地旋转的 locomotion policy。
-4. **扩大地图与重定位覆盖**：从当前约 1.11 m × 1.97 m 目标区域扩展到完整仓库，并验证多初始位姿、回环漂移和 kidnapped-robot recovery。
-5. **执行连续保存压力测试和 30 分钟以上整链路 soak**：正式采集丢帧、NDT、TF、内存和退出稳定性指标，不能仅以进程持续存活代替报告。
-6. **整理版本管理和地图/日志保留策略**：区分源码、主验证证据、大体积地图和可清理临时产物。
+1. **在最大可达范围新图上完成重定位与 Nav2 运行验收**：新图已保存并通过离线结构/栅格检查；下一步从多个初始位姿验证 NDT、TF、代价地图和真实 action。封闭结构门后的房间需先明确是否允许修改场景，不能用 reset 或 GT 位姿伪造覆盖。
+2. **接通连续地图到 HMSG**：连续 RGB-D-Pose OVO map 已真实生成；下一步转换为多视角/多房间 HMSG，并验证跨位置查询。
+3. **校准语义拒绝与可达性**：建立 SigLIP 未知目标拒绝集，并在发 Nav2 前检查语义目标附近的可达落脚点。
+4. **补齐 Agent 异常闭环**：真实验证重定位丢失、120 s 超时取消、停车和恢复后的再执行。
+5. **收紧容差并补测控制边界**：量化 0.5 m 目标容差、低速组合命令死区、40 s wall-time 窗口和高 yaw 曲线适配边界。
+6. **执行连续保存压力测试和 30 分钟以上整链路 soak**：正式采集丢帧、NDT、TF、内存和退出稳定性指标，不能仅以进程持续存活代替报告。
+7. **整理版本管理和地图/日志保留策略**：区分源码、主验证证据、大体积地图和可清理临时产物。
 
 # 关键证据与入口
 
@@ -734,11 +797,21 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 - 运行说明：`holoagent_bridge/README.md`
 - 当前主验证地图：`holoagent_bridge/maps/mid360_final_long_20260807_a/`
 - 同会话重复保存地图：`holoagent_bridge/maps/mid360_final_long_20260807_b/`
+- 当前最大可达范围地图：`holoagent_bridge/maps/mid360_full_reachable_20260810_211845_b/`
+- 同会话较早保存副本：`holoagent_bridge/maps/mid360_full_reachable_20260810_211845_a/`
+- 最大可达范围地图汇总：`holoagent_bridge/validation/full_reachable_map_summary_20260810.json`
 - 早期短链路地图：`holoagent_bridge/maps/mid360_sim_20260806_102736/`
 - 最终长图与 Nav2 汇总：`holoagent_bridge/validation/final_long_map_summary_20260807.json`
 - LiDAR/IMU 同步报告：`holoagent_bridge/validation/lidar_imu_sync.json`
+- 全图重建前真实 LiDAR/IMU 同步报告：`holoagent_bridge/validation/lidar_imu_sync_full_map_20260810.json`
 - LIO 动态精度：`holoagent_bridge/validation/lio_imu_dynamic_accuracy_20260806_2233.json`
 - 重定位动态精度：`holoagent_bridge/validation/relocalization_extrinsic_dynamic_accuracy_20260807_1010.json`
 - Nav2 配置：`HoloAgent/agentic_robot/core/src/nav_bringup/param/g1.yaml`
 - FAST-LIVO 仿真配置：`holoagent_bridge/fast_livo_mid360_sim.yaml`
 - online_relo 配置：`holoagent_bridge/fast_livo_mid360_reloc_sim.yaml`
+- 实时 SAM3/SigLIP 语义建图入口：`HoloAgent/agentic_robot/fsr_vln/scripts/isaac_live_semantic_map.py`
+- HMSG 查询服务：`HoloAgent/agentic_robot/fsr_vln/scripts/hmsg_query_server.py`
+- 连续 SAM3/SigLIP checkpoint：`holoagent_bridge/semantic_mapping_data/output/IsaacG1/sam3_siglip_real_v2/semantic_navigation/ovo_map.ckpt`
+- Agent 真实闭环记录：`HoloAgent/agentic_robot/agentOS/task_runs/single_robot_20260810_010119_809856/`
+- Agent 独立运动验收：`holoagent_bridge/validation/agent_semantic_yellow_crate_summary_20260810.json`
+- Agent GUI 五段长程演示：`holoagent_bridge/validation/agent_long_demo_summary_20260810.json`

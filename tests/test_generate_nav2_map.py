@@ -3,12 +3,13 @@ from pathlib import Path
 from holoagent_bridge.generate_nav2_map import bresenham, build_grid, parse_args
 
 
-def test_default_obstacle_floor_matches_runtime_costmap(monkeypatch, tmp_path: Path) -> None:
+def test_default_obstacle_height_band(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("sys.argv", ["generate_nav2_map.py", str(tmp_path)])
 
     args = parse_args()
 
-    assert args.min_obstacle_z == -0.3
+    assert args.min_obstacle_z == -0.8
+    assert args.max_obstacle_z == 0.3
 
 
 def test_bresenham_includes_real_ray_origin_and_endpoint() -> None:

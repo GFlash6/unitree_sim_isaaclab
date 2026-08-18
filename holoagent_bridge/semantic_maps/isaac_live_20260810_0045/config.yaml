@@ -1,0 +1,34 @@
+device: cuda
+mapping:
+  max_frame_points: 100000
+  k_pooling: 1
+  downscale_res: 2
+semantic:
+  match_distance_th: 0.05
+  track_th: 20
+  depth_filter: false
+  log: false
+  kf_queue_delay: 0
+  min_points_th: 10
+  min_track_frames_th: 1
+  sam:
+    precomputed: false
+    multi_crop: true
+    mask_res: 384
+    sam_version: '3'
+    sam_ckpt_path: /home/ubuntu/.cache/modelscope/models/facebook--sam3/snapshots/master/sam3.pt
+    sam_prompts:
+    - yellow plastic crate
+    - blue plastic crate
+    - packing table
+    confidence_threshold: 0.5
+    min_mask_region_area: 100
+    nms_iou_th: 0.8
+    nms_score_th: 0.25
+    nms_inner_th: 0.5
+  clip:
+    use_half: true
+    embed_type: fixed_weights
+    model_card: SigLIP-384
+    model_path: /home/ubuntu/.cache/modelscope/models/timm--ViT-SO400M-14-SigLIP-384/snapshots/master
+    k_top_views: 10

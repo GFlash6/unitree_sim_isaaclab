@@ -108,9 +108,22 @@ def test_cmd_vel_high_positive_yaw_uses_measured_policy_working_point() -> None:
     assert command == [0.0, 0.3, 0.8, 0.8]
 
 
-def test_cmd_vel_low_yaw_preserves_planar_command() -> None:
+def test_cmd_vel_low_yaw_uses_measured_minimum_effective_forward_command() -> None:
     bridge = load_module(ROOT / "holoagent_bridge" / "cmd_vel_to_unitree_dds.py", "cmd_vel_to_unitree_dds")
     args = bridge.parse_args([])
+    msg = SimpleNamespace(
+        linear=SimpleNamespace(x=0.16, y=0.0),
+        angular=SimpleNamespace(z=0.4),
+    )
+
+    command = bridge.command_from_twist(msg, args, now=10.0, last_stamp=9.9)
+
+    assert command == [0.6, 0.0, 0.4, 0.8]
+
+
+def test_cmd_vel_minimum_effective_forward_can_be_disabled() -> None:
+    bridge = load_module(ROOT / "holoagent_bridge" / "cmd_vel_to_unitree_dds.py", "cmd_vel_to_unitree_dds")
+    args = bridge.parse_args(["--min-effective-forward", "0"])
     msg = SimpleNamespace(
         linear=SimpleNamespace(x=0.16, y=0.0),
         angular=SimpleNamespace(z=0.4),
@@ -197,7 +210,8 @@ def test_holoagent_semantic_goal_publishes_valid_orientation() -> None:
         "semantic_goal_node.py"
     ).read_text(encoding="utf-8")
 
-    assert "msg.pose.orientation.w = 1.0" in source
+    assert "goal.pose.orientation.z = math.sin(yaw / 2.0)" in source
+    assert "goal.pose.orientation.w = math.cos(yaw / 2.0)" in source
 
 
 def test_robot_bridge_reports_configured_robot_id() -> None:

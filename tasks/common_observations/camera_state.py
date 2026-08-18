@@ -111,12 +111,33 @@ def get_camera_image(
     camera_keys = _camera_cache['camera_keys']
     # Head camera (front camera)
     if "front_camera" in camera_keys:
-        head_image = env.scene["front_camera"].data.output["rgb"][0]  # [batch, height, width, 3]
+        front_camera = env.scene["front_camera"]
+        front_output = front_camera.data.output
+        head_image = front_output["rgb"][0]  # [height, width, 3]
 
         if head_image.device.type == 'cpu':
             images["head"] = head_image.numpy()
         else:
             images["head"] = head_image.cpu().numpy()
+
+        head_depth = front_output.get("distance_to_image_plane")
+        if head_depth is not None:
+            head_depth = head_depth[0]
+            if head_depth.device.type != 'cpu':
+                head_depth = head_depth.cpu()
+            images["head_depth"] = head_depth.numpy().astype('float32', copy=False)
+
+        camera_pos = getattr(front_camera.data, "pos_w", None)
+        camera_quat = getattr(front_camera.data, "quat_w_ros", None)
+        robot = env.scene["robot"] if "robot" in camera_keys else None
+        if camera_pos is not None and camera_quat is not None and robot is not None:
+            robot_pos = robot.data.root_link_pos_w
+            robot_quat = robot.data.root_link_quat_w
+            poses = torch.stack((
+                torch.cat((camera_pos[0], camera_quat[0])),
+                torch.cat((robot_pos[0], robot_quat[0])),
+            ))
+            images["head_pose"] = poses.cpu().numpy().astype('float32', copy=False)
     
     # Left camera (left wrist camera)
     if "left_wrist_camera" in camera_keys:
@@ -172,4 +193,3 @@ def get_camera_image(
         print("[camera_state] No camera images found in the environment")
     
     return _return_placeholder
-

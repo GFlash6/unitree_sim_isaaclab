@@ -26,7 +26,7 @@ class TableCylinderSceneCfgWH(InteractiveSceneCfg): # inherit from the interacti
             rot=[1.0, 0.0, 0.0, 0.0]
         ),
         spawn=UsdFileCfg(
-            usd_path=f"{project_root}/assets/objects/small_warehouse/small_warehouse_digital_twin.usd",
+            usd_path=f"{project_root}/assets/objects/small_warehouse/small_warehouse_no_door.usda",
         ),
     )
 

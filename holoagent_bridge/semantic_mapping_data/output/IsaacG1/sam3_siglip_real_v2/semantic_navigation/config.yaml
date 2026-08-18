@@ -1,0 +1,104 @@
+cam:
+  H: 480
+  W: 640
+  cx: 319.5
+  cy: 239.5
+  depth_scale: 1.0
+  depth_th: 10.0
+  fx: 243.2
+  fy: 243.2
+checkpoint_path: null
+data:
+  H: 480
+  W: 640
+  dataset_name: isaacg1
+  input_path: /home/ubuntu/agents/unitree_sim_isaaclab/holoagent_bridge/semantic_mapping_data/input/datasets/IsaacG1/decoded_scans/semantic_navigation
+  scene_name: semantic_navigation
+dataset_name: isaacg1
+device: cuda:1
+frame_limit: -1
+mapping:
+  downscale_res: 2
+  k_pooling: 1
+  map_every: 2
+  max_frame_points: 100000
+pose_post_transform:
+- - 1
+  - 0
+  - 0
+  - 0
+- - 0
+  - 1
+  - 0
+  - 0
+- - 0
+  - 0
+  - 1
+  - 0
+- - 0
+  - 0
+  - 0
+  - 1
+project_name: holoagent_isaac_semantic_mapping
+ros:
+  depth_qos_depth: 10
+  keyframe_pcd_frame_id: map
+  max_queue: 120
+  pose_qos_depth: 10
+  publish_global_pcd: false
+  publish_keyframe_pcd: true
+  rgb_qos_depth: 10
+scenes:
+- semantic_navigation
+seed: 0
+semantic:
+  clip:
+    embed_type: fixed_weights
+    k_top_views: 10
+    model_card: SigLIP-384
+    model_path: /home/ubuntu/.cache/modelscope/models/timm--ViT-SO400M-14-SigLIP-384/snapshots/master
+    use_half: true
+  depth_filter: false
+  kf_queue_delay: 4
+  log: true
+  match_distance_th: 0.05
+  min_points_th: 10
+  min_track_frames_th: 2
+  sam:
+    confidence_threshold: 0.05
+    mask_res: 384
+    masks_base_path: data/working/masks/isaac_sam3
+    max_masks: 50
+    min_mask_region_area: 100
+    multi_crop: true
+    nms_inner_th: 0.5
+    nms_iou_th: 0.8
+    nms_score_th: 0.05
+    precomputed: false
+    sam_prompts:
+    - object
+    sam_version: 3-service
+    service_timeout: 120.0
+    service_url: http://127.0.0.1:8114
+  segment_every: 4
+  track_th: 100
+  use_gt_clips: false
+  use_gt_masks: false
+  use_ram_groundingdino_sam2: false
+slam:
+  close_loops: false
+  config_path: configs/slam
+  slam_module: vanilla
+  use_viewer: false
+topic:
+  depth_topic: /isaac/front/depth
+  pose_topic: /isaac/front/pose
+  rgb_topic: /isaac/front/rgb
+  sync_queue_size: 30
+  sync_slop: 0.08
+tracking:
+  track_every: 1
+use_wandb: false
+vis:
+  show_stream: false
+  stream: false

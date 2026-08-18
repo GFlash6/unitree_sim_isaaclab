@@ -57,6 +57,7 @@ class CameraBaseCfg:
         return CameraCfg(
             prim_path=prim_path,
             update_period=update_period,
+            update_latest_camera_pose=True,
             height=height,
             width=width,
             data_types=data_types,
@@ -86,7 +87,8 @@ class CameraPresets:
     @classmethod
     def g1_front_camera(cls) -> CameraCfg:
         """front camera configuration"""
-        return CameraBaseCfg.get_camera_config()
+        return CameraBaseCfg.get_camera_config(
+            data_types=["rgb", "distance_to_image_plane"])
     @classmethod
     def h12_front_camera(cls) -> CameraCfg:
         """front camera configuration"""
@@ -138,7 +140,7 @@ class CameraPresets:
             clipping_range=(0.1, 1.0e5),
             pos_offset=(-0.02541028, 0.045, 0.135),
             rot_offset=(-0.34202, 0.93969, 0, 0),
-        ) 
+        )
     @classmethod
     def left_dex3_wrist_camera(cls) -> CameraCfg:
         """left wrist camera configuration"""
@@ -170,7 +172,7 @@ class CameraPresets:
             clipping_range=(0.1, 1.0e5),
             pos_offset=(-0.04012, 0.07441 ,0.15711),
             rot_offset=(0.00539,0.86024,0.0424, 0.50809),
-        ) 
+        )
     
     @classmethod
     def left_inspire_wrist_camera(cls) -> CameraCfg:
@@ -203,4 +205,4 @@ class CameraPresets:
             clipping_range=(0.1, 1.0e5),
             pos_offset=(-0.04012, 0.07441 ,0.15711),
             rot_offset=(0.00539,0.86024,0.0424, 0.50809),
-        ) 
+        )

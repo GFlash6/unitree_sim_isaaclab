@@ -180,6 +180,15 @@ def main():
     try:
         env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=1)
         env_cfg.env_name = args_cli.task
+        if args_cli.no_render:
+            for camera_name in (
+                "front_camera", "left_wrist_camera", "right_wrist_camera", "robot_camera"
+            ):
+                if hasattr(env_cfg.scene, camera_name):
+                    setattr(env_cfg.scene, camera_name, None)
+            if hasattr(env_cfg.observations.policy, "camera_image"):
+                env_cfg.observations.policy.camera_image = None
+            print("[sim] camera sensors disabled before environment creation via --no_render")
     except Exception as e:
         print(f"Failed to parse environment configuration: {e}")
         return

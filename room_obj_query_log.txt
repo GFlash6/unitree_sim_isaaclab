@@ -1,0 +1,34 @@
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to yellow crate -- 1, warehouse, yellow crate
+query: navigate to blue crate -- 1, warehouse, blue crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to blue crate -- 1, warehouse, blue crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to white cardboard box -- 1, warehouse, white cardboard box
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to traffic cone -- 1, warehouse, traffic cone
+query: navigate to red cylinder -- 1, warehouse, red cylinder
+query: navigate to yellow crate -- 1, warehouse, yellow crate
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to blue plastic crate -- 1, warehouse, blue plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to packing table -- 1, warehouse, packing table
+query: navigate to computer -- 1, warehouse, computer
+query: navigate to 电脑 -- 1, warehouse, 电脑

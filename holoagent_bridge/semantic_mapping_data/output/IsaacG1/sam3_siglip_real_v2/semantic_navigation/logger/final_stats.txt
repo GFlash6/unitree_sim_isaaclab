@@ -1,0 +1,12 @@
+Avg t_sam: 0.856
+Avg t_obj: 0.078
+Avg n_obj: 0.031
+Avg n_matches: 294874.662
+Avg t_up: 0.001
+Avg t_seg: 0.0
+Avg t_clip: 0.023
+Avg avg_fps: 0.85
+Avg ram: 3.714
+Avg vram: 0.0
+Max RAM: 3.79
+Max vRAM: 0.0

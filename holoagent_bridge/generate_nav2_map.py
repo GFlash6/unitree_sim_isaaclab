@@ -24,8 +24,8 @@ def parse_args() -> argparse.Namespace:
         default=0.3,
         help="Clear this radius around every real keyframe pose; the robot physically traversed these cells.",
     )
-    parser.add_argument("--min-obstacle-z", type=float, default=-0.3)
-    parser.add_argument("--max-obstacle-z", type=float, default=1.5)
+    parser.add_argument("--min-obstacle-z", type=float, default=-0.8)
+    parser.add_argument("--max-obstacle-z", type=float, default=0.3)
     return parser.parse_args()
 
 
