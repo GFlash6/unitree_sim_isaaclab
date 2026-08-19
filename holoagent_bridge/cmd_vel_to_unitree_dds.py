@@ -25,8 +25,8 @@ def nonnegative_float(value: str) -> float:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Forward ROS2 /cmd_vel to the Unitree sim wholebody DDS run-command topic.")
-    parser.add_argument("--cmd-vel-topic", default="/cmd_vel", help="ROS2 geometry_msgs/Twist topic to subscribe.")
+    parser = argparse.ArgumentParser(description="Forward ROS 2 cmd_vel to the Unitree sim wholebody DDS run-command topic.")
+    parser.add_argument("--cmd-vel-topic", default="cmd_vel", help="ROS2 geometry_msgs/Twist topic to subscribe.")
     parser.add_argument("--dds-topic", default="rt/run_command/cmd", help="Unitree DDS String_ topic consumed by sim_main wholebody tasks.")
     parser.add_argument("--dds-domain", type=int, default=1, help="Unitree DDS channel; sim_main uses 1.")
     parser.add_argument("--height", type=bounded_float, default=0.8, help="Fourth run-command value expected by the locomotion policy.")

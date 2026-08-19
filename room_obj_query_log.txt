@@ -32,3 +32,10 @@ query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
 query: navigate to packing table -- 1, warehouse, packing table
 query: navigate to computer -- 1, warehouse, computer
 query: navigate to 电脑 -- 1, warehouse, 电脑
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to yellow plastic crate -- 1, warehouse, yellow plastic crate
+query: navigate to 黄色塑料料箱 -- 1, warehouse, 黄色塑料料箱
+query: navigate to yellow plastic bin -- 1, warehouse, yellow plastic bin
+query: navigate to yellow plastic bin -- 1, warehouse, yellow plastic bin

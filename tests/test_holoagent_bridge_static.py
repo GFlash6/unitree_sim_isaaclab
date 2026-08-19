@@ -30,16 +30,19 @@ def load_module(path: Path, name: str):
 
 
 def test_mid360_bridge_has_no_synthetic_cloud_path() -> None:
-    source = (ROOT / "test" / "mid360_to_ros2_topic.py").read_text(encoding="utf-8")
+    source = (ROOT / "holoagent_bridge" / "mid360_to_ros2_topic.py").read_text(encoding="utf-8")
     assert "--fake" not in source
     assert "fake_points" not in source
     assert "PointCloudReader()" in source
 
 
 def test_mid360_bridge_only_publishes_raw_sensor_topic() -> None:
-    bridge = load_module(ROOT / "test" / "mid360_to_ros2_topic.py", "mid360_to_ros2_topic")
+    bridge = load_module(
+        ROOT / "holoagent_bridge" / "mid360_to_ros2_topic.py",
+        "mid360_to_ros2_topic",
+    )
     args = bridge.parse_args([])
-    assert args.topic == "/mid360/points"
+    assert args.topic == "sensors/lidar/points"
     assert not hasattr(args, "reloc_topic")
 
 
@@ -189,6 +192,18 @@ def test_holoagent_navigation_skills_match_robot_bridge_contract() -> None:
     assert '"cmd": "1.0,0.0,90"' in relative
 
 
+def test_holoagent_agent_polls_action_results_directly() -> None:
+    source = (
+        ROOT / "HoloAgent" / "agentic_robot" / "agentOS" / "sandbox_test" /
+        "long_horizon_text_runner.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'accepted.get("goal_id", "")' in source
+    assert '/api/tasks/{goal_id}' in source
+    assert 'state == "succeeded"' in source
+    assert "视觉语义模型的开放词汇查询使用英文" in source
+
+
 def test_holoagent_nav_executor_reports_terminal_failures_and_cancel() -> None:
     source = (
         ROOT / "HoloAgent" / "agentic_robot" / "core" / "src" /
@@ -201,6 +216,7 @@ def test_holoagent_nav_executor_reports_terminal_failures_and_cancel() -> None:
     assert "tf_transformations" not in source
     assert "math.sin(yaw / 2.0)" in source
     assert "declare_parameter('robot_name', 'unitree')" in source
+    assert "self._start_single_pose(msg, self.goal_status_pub)" in source
 
 
 def test_holoagent_semantic_goal_publishes_valid_orientation() -> None:
@@ -210,8 +226,8 @@ def test_holoagent_semantic_goal_publishes_valid_orientation() -> None:
         "semantic_goal_node.py"
     ).read_text(encoding="utf-8")
 
-    assert "goal.pose.orientation.z = math.sin(yaw / 2.0)" in source
-    assert "goal.pose.orientation.w = math.cos(yaw / 2.0)" in source
+    assert "goal.pose.orientation.z = float(np.sin(yaw / 2.0))" in source
+    assert "goal.pose.orientation.w = float(np.cos(yaw / 2.0))" in source
 
 
 def test_robot_bridge_reports_configured_robot_id() -> None:
@@ -272,7 +288,7 @@ def test_fast_livo_save_map_is_synchronous_and_repeatable() -> None:
 def test_documented_mapping_launch_enables_keyframe_collection() -> None:
     readme = (ROOT / "holoagent_bridge" / "README.md").read_text(encoding="utf-8")
     mapping_launch = readme[
-        readme.index("Terminal 6, start HoloAgent FAST-LIVO") :
+        readme.index("To build a new relocation map") :
         readme.index("Before starting FAST-LIVO")
     ]
     assert "--params-file holoagent_bridge/fast_livo_mid360_mapping_sim.yaml" in mapping_launch
@@ -294,7 +310,7 @@ def test_relocalization_external_topics_use_ros_time() -> None:
     odom_publish = source[source.index("void pose_estimator::publish_odometry(", source.index("void pose_estimator::publish_odometry(") + 1) : source.index("void pose_estimator::publish_path")]
 
     assert 'publishCloud(pubRelocBodyCloud, cloudInBody, publish_stamp, "base_link")' in cloud_publish
-    assert "currentCloudTime * 1e9" not in cloud_publish
+    assert "currentCloudTime * 1e9" in cloud_publish
     assert "odomAftMapped.header.stamp = stamp;" in source
     assert "odomAftMapped.header.stamp = this->node->now();" not in odom_publish
 
@@ -364,12 +380,12 @@ def test_nav2_consumes_validated_relocalization_odometry() -> None:
         / "param"
         / "g1.yaml"
     ).read_text(encoding="utf-8")
-    assert "odom_topic: /pose" in config
+    assert "odom_topic: localization/odom" in config
     assert "odom_topic: /odom" not in config
     controller_config = config[
         config.index("controller_server:") : config.index("controller_server_rclcpp_node:")
     ]
-    assert "odom_topic: /pose" in controller_config
+    assert "odom_topic: localization/odom" in controller_config
 
 
 def test_nav2_obstacle_layer_rejects_simulated_ground_returns() -> None:

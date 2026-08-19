@@ -27,28 +27,40 @@ Terminal 2, source ROS2 and start the MID360 bridge:
 
 ```bash
 source /opt/ros/humble/setup.bash
-/usr/bin/python3 test/mid360_to_ros2_topic.py --topic /mid360/points --frame-id mid360_link
+/usr/bin/python3 holoagent_bridge/mid360_to_ros2_topic.py
 ```
 
 Terminal 3, publish the real IsaacLab body IMU with its original simulator timestamp:
 
 ```bash
 source /opt/ros/humble/setup.bash
-/usr/bin/python3 holoagent_bridge/imu_to_ros2_topic.py --topic /livox/imu --frame-id imu_link
+/usr/bin/python3 holoagent_bridge/imu_to_ros2_topic.py
 ```
 
 The IMU bridge publishes only fresh shared-memory records. It exits non-zero
 if source timestamps repeat or move backwards; it never substitutes ROS wall
-time or fabricated measurements.
+time or fabricated measurements. It also publishes that simulator time on
+global `/clock`.
 
-Terminal 4, source ROS2 and start the command bridge:
+Terminal 4, publish synchronized RGB-D, CameraInfo, and measured camera TF:
 
 ```bash
 source /opt/ros/humble/setup.bash
-/usr/bin/python3 holoagent_bridge/cmd_vel_to_unitree_dds.py --cmd-vel-topic /cmd_vel
+/usr/bin/python3 holoagent_bridge/isaac_rgbd_pose_bridge.py
 ```
 
-Terminal 5, continuously send a real ROS2 velocity command while motion is
+This bridge has no localization subscription. `robot_io` owns only the
+`base_link -> front_camera_optical_frame` transform; localization separately
+owns `map -> base_link`.
+
+Terminal 5, source ROS2 and start the command bridge:
+
+```bash
+source /opt/ros/humble/setup.bash
+/usr/bin/python3 holoagent_bridge/cmd_vel_to_unitree_dds.py
+```
+
+Terminal 6, continuously send a real ROS2 velocity command while motion is
 required:
 
 ```bash
@@ -70,15 +82,28 @@ through unchanged. Set `--turn-assist-speed 0` to disable the adapter, or tune
 `--turn-assist-yaw-threshold` explicitly. Stale commands always become zero
 velocity before this adjustment is considered.
 
-Terminal 6, start HoloAgent FAST-LIVO with the simulator sensor streams:
+Terminal 7, start HoloAgent LIO and prior-map localization with canonical
+topics (omit `online_relo` only when building a new map):
 
 ```bash
-source HoloAgent/robots/unitree/scripts/init_env.sh
+source /opt/ros/humble/setup.bash
+source HoloAgent/agentic_robot/core/install/setup.bash
+ros2 launch fast_livo isaac_localization.launch.py \
+  prior_map:=/absolute/path/to/prepared_relocation_map/
+```
+
+To build a new relocation map, run only FAST-LIVO with the complete base
+configuration followed by the Isaac and mapping overlays:
+
+```bash
 ros2 run fast_livo fastlivo_mapping --ros-args \
   --params-file HoloAgent/agentic_robot/core/install/fast_livo/share/fast_livo/config/mid360_online_livo.yaml \
   --params-file HoloAgent/agentic_robot/core/install/fast_livo/share/fast_livo/config/camera_d435i.yaml \
   --params-file holoagent_bridge/fast_livo_mid360_sim.yaml \
-  --params-file holoagent_bridge/fast_livo_mid360_mapping_sim.yaml
+  --params-file holoagent_bridge/fast_livo_mid360_mapping_sim.yaml \
+  -p use_sim_time:=true \
+  -r /undistort_cloud:=lio/undistorted_points \
+  -r /aft_mapped_to_init:=lio/odom
 ```
 
 Before starting FAST-LIVO, keep the robot stationary and require the live
@@ -123,7 +148,7 @@ validated before the response was sent.
 ```bash
 source /opt/ros/humble/setup.bash
 source HoloAgent/agentic_robot/core/install/setup.bash
-ros2 service call /fast_livo/save_map fast_livo/srv/SaveMap \
+ros2 service call /lio/save_map fast_livo/srv/SaveMap \
   "{resolution: 0.2, destination: '/absolute/path/to/new_map_directory'}"
 python3 holoagent_bridge/prepare_reloc_map.py /absolute/path/to/new_map_directory
 ```
@@ -136,13 +161,10 @@ hashes are identical. When relocalizing without returning the robot to the
 map's first pose, provide `relo.initpose_prior` near the latest saved
 `mapping.txt` pose instead of leaving the default `[0, 0, 0]` prior.
 
-Start online relocalization against the configured real map while FAST-LIVO is
-still publishing `/undistort_cloud` and `/aft_mapped_to_init`:
+The canonical launch above starts online relocalization against the selected
+map while FAST-LIVO publishes `lio/undistorted_points` and `lio/odom`:
 
 ```bash
-source HoloAgent/robots/unitree/scripts/init_env.sh
-ros2 run fast_livo online_relo --ros-args \
-  --params-file holoagent_bridge/fast_livo_mid360_reloc_sim.yaml
 /usr/bin/python3 holoagent_bridge/validate_relocalization.py --duration 30
 ```
 
@@ -157,15 +179,16 @@ instead of entering PCL's unsafe empty-KD-tree search path.
 Use these checks while the sim and bridges are running:
 
 ```bash
-ros2 topic echo --once /mid360/points
-ros2 topic echo --once /livox/imu
-ros2 topic echo --once /aft_mapped_to_init
-ros2 topic echo --once /pose
-ros2 topic hz /reloc_body_cloud
-ros2 topic echo --once /relocalization/fitness_score
+ros2 topic echo --once /sensors/lidar/points
+ros2 topic echo --once /sensors/imu/data
+ros2 topic echo --once /lio/odom
+ros2 topic echo --once /localization/odom
+ros2 topic hz /perception/obstacles
+ros2 topic echo --once /localization/status
 ```
 
-`/reloc_body_cloud` is produced by `online_relo`, not by the raw MID360 bridge.
+`perception/obstacles` is produced by the current online-relocalization adapter,
+not by the raw MID360 bridge.
 A passing result requires finite, strictly time-ordered poses, non-empty body
 clouds, successful registrations below the configured fitness threshold, and
 continued output over the validation interval.
@@ -174,10 +197,12 @@ continued output over the validation interval.
 
 - HoloAgent/Nav2 command input: `/cmd_vel`
 - IsaacLab wholebody DDS command output: `rt/run_command/cmd`
-- IsaacLab MID360 point cloud: `/mid360/points`
-- IsaacLab torso IMU: `/livox/imu`
-- HoloAgent local costmap point cloud topic: `/reloc_body_cloud`
-- HoloAgent FAST-LIVO simulator point cloud input: `/mid360/points`
+- IsaacLab MID360 point cloud: `sensors/lidar/points`
+- IsaacLab torso IMU: `sensors/imu/data`
+- IsaacLab RGB-D: `sensors/front/{rgb,depth,camera_info}`
+- HoloAgent LIO output: `lio/{odom,undistorted_points,path}`
+- HoloAgent localization output: `localization/{odom,status}`
+- HoloAgent local costmap point cloud: `perception/obstacles`
 
 ## MID360 Authenticity
 

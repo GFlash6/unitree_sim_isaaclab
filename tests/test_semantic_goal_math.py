@@ -6,9 +6,9 @@ import numpy as np
 
 MODULE_PATH = (
     Path(__file__).parents[1]
-    / "HoloAgent/agentic_robot/core/src/navigation/semantic_goal/semantic_goal/semantic_goal_node.py"
+    / "HoloAgent/agentic_robot/core/src/navigation/semantic_goal/semantic_goal/geometry.py"
 )
-SPEC = importlib.util.spec_from_file_location("semantic_goal_node", MODULE_PATH)
+SPEC = importlib.util.spec_from_file_location("semantic_goal_geometry", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 

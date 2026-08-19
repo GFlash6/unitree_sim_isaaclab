@@ -51,7 +51,8 @@ def _async_writer_loop(q: "queue.Queue", writer: MultiImageWriter):
             item = q.get()
             if item is None:
                 break
-            writer.write_images(item)
+            images, timestamp_ms = item
+            writer.write_images(images, timestamp_ms=timestamp_ms)
         except Exception as e:
             print(f"[camera_state] Async writer error: {e}")
 
@@ -131,13 +132,19 @@ def get_camera_image(
         camera_quat = getattr(front_camera.data, "quat_w_ros", None)
         robot = env.scene["robot"] if "robot" in camera_keys else None
         if camera_pos is not None and camera_quat is not None and robot is not None:
-            robot_pos = robot.data.root_link_pos_w
-            robot_quat = robot.data.root_link_quat_w
-            poses = torch.stack((
-                torch.cat((camera_pos[0], camera_quat[0])),
-                torch.cat((robot_pos[0], robot_quat[0])),
-            ))
-            images["head_pose"] = poses.cpu().numpy().astype('float32', copy=False)
+            try:
+                base_index = robot.data.body_names.index("imu_in_torso")
+                base_pose = robot.data.body_link_pose_w[0, base_index]
+                poses = torch.stack((
+                    torch.cat((camera_pos[0], camera_quat[0])),
+                    base_pose,
+                ))
+                images["head_pose"] = poses.cpu().numpy().astype(
+                    'float32', copy=False)
+            except ValueError:
+                # Do not silently label the articulation root as base_link.
+                # Localization defines base_link at the torso IMU.
+                pass
     
     # Left camera (left wrist camera)
     if "left_wrist_camera" in camera_keys:
@@ -186,7 +193,8 @@ def get_camera_image(
             
             if _async_queue.full():
                 _async_queue.get_nowait()
-            _async_queue.put_nowait(images)
+            timestamp_ms = max(1, int(float(env.sim.current_time) * 1000))
+            _async_queue.put_nowait((images, timestamp_ms))
         except Exception:
             pass
     elif not images:

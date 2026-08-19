@@ -103,7 +103,7 @@ def test_failed_report_is_strict_json_serializable(tmp_path) -> None:
 
 def test_fast_livo_overlay_enables_real_imu_and_declares_measured_extrinsic() -> None:
     config = (SCRIPT.parent / "fast_livo_mid360_sim.yaml").read_text(encoding="utf-8")
-    assert 'imu_topic: "/livox/imu"' in config
+    assert 'imu_topic: "sensors/imu/data"' in config
     assert "imu_en: true" in config
     assert "img_en: 0" in config
     assert "enable_wheel_odom: false" in config

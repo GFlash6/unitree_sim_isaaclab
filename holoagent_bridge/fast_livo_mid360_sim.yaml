@@ -1,8 +1,8 @@
 /**:
   ros__parameters:
     common:
-      lid_topic: "/mid360/points"
-      imu_topic: "/livox/imu"
+      lid_topic: "sensors/lidar/points"
+      imu_topic: "sensors/imu/data"
       img_en: 0
       lidar_en: 1
 

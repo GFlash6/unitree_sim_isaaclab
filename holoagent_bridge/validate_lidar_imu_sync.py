@@ -38,8 +38,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Validate stationary IsaacLab LiDAR/IMU rate, time alignment, and measurements."
     )
-    parser.add_argument("--lidar-topic", default="/mid360/points")
-    parser.add_argument("--imu-topic", default="/livox/imu")
+    parser.add_argument("--lidar-topic", default="sensors/lidar/points")
+    parser.add_argument("--imu-topic", default="sensors/imu/data")
     parser.add_argument("--duration", type=positive_float, default=10.0, help="Required overlap in simulator seconds.")
     parser.add_argument("--wall-timeout", type=positive_float, default=120.0)
     parser.add_argument("--output-json", help="Optional path for the machine-readable report.")

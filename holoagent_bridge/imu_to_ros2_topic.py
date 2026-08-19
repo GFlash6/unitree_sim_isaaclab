@@ -51,10 +51,16 @@ def positive_float(value: str) -> float:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Forward IsaacLab IMU shared memory to ROS 2.")
-    parser.add_argument("--topic", default="/livox/imu", help="ROS 2 sensor_msgs/Imu topic.")
+    parser.add_argument("--topic", default="sensors/imu/data", help="ROS 2 sensor_msgs/Imu topic.")
     parser.add_argument("--frame-id", default="imu_link", help="IMU body frame.")
     parser.add_argument("--poll-rate", type=positive_float, default=200.0, help="Shared-memory poll rate in Hz.")
     parser.add_argument("--once", action="store_true", help="Publish one fresh sample and exit.")
+    parser.add_argument(
+        "--publish-clock",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Publish the Isaac time domain on /clock.",
+    )
     return parser.parse_args(argv)
 
 
@@ -113,6 +119,7 @@ def main(argv: list[str]) -> int:
         import rclpy
         from rclpy.node import Node
         from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+        from rosgraph_msgs.msg import Clock
         from sensor_msgs.msg import Imu
     except ImportError as exc:
         raise SystemExit("rclpy is not importable. Source the ROS 2 environment first.") from exc
@@ -121,6 +128,7 @@ def main(argv: list[str]) -> int:
     node = Node("isaac_imu_shared_memory_bridge")
     qos = QoSProfile(depth=2000, reliability=QoSReliabilityPolicy.RELIABLE)
     publisher = node.create_publisher(Imu, args.topic, qos)
+    clock_publisher = node.create_publisher(Clock, "/clock", 10) if args.publish_clock else None
     reader = ImuReader()
     guard = TimestampGuard()
     published_once = False
@@ -141,6 +149,10 @@ def main(argv: list[str]) -> int:
             timer.cancel()
             return
         publisher.publish(msg)
+        if clock_publisher is not None:
+            clock = Clock()
+            clock.clock = msg.header.stamp
+            clock_publisher.publish(clock)
         published_once = True
         now = time.monotonic()
         if now - last_log >= 1.0:

@@ -73,10 +73,10 @@ def main() -> int:
         nonlocal successes
         successes += int(message.data)
 
-    node.create_subscription(Odometry, "/pose", pose_cb, 10)
-    node.create_subscription(PointCloud2, "/reloc_body_cloud", cloud_cb, 10)
-    node.create_subscription(Float64, "/relocalization/fitness_score", score_cb, 10)
-    node.create_subscription(Bool, "/relocalization/registration_success", success_cb, 10)
+    node.create_subscription(Odometry, "/localization/odom", pose_cb, 10)
+    node.create_subscription(PointCloud2, "/perception/obstacles", cloud_cb, 10)
+    node.create_subscription(Float64, "/localization/fitness_score", score_cb, 10)
+    node.create_subscription(Bool, "/localization/registration_success", success_cb, 10)
     deadline = time.monotonic() + args.duration
     try:
         while rclpy.ok() and time.monotonic() < deadline:

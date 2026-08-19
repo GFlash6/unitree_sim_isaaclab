@@ -67,7 +67,7 @@ class MultiImageWriter:
         """
         # 50 FPS 限速（避免高频阻塞主循环）
         self._min_interval_sec = 1.0 / 50.0
-        self._last_write_ts_ms = 0
+        self._last_write_monotonic = 0.0
 
         # 压缩与颜色空间配置（由主进程注入）
         self._enable_jpeg = bool(enable_jpeg)
@@ -86,7 +86,10 @@ class MultiImageWriter:
         if skip_cvtcolor is not None:
             self._skip_cvtcolor = bool(skip_cvtcolor)
 
-    def write_images(self, images: Dict[str, np.ndarray]) -> bool:
+    def write_images(
+            self,
+            images: Dict[str, np.ndarray],
+            timestamp_ms: Optional[int] = None) -> bool:
         """Write multiple images to separate shared memories
 
         Args:
@@ -99,9 +102,15 @@ class MultiImageWriter:
             return False
 
         # 轻量限速：最多 50 FPS，直接跳过多余写入，避免阻塞主循环
-        now_ms = int(time.time() * 1000)
-        if self._last_write_ts_ms and (now_ms - self._last_write_ts_ms) < int(self._min_interval_sec * 1000):
+        now_monotonic = time.monotonic()
+        if (self._last_write_monotonic and
+                now_monotonic - self._last_write_monotonic < self._min_interval_sec):
             return True
+        if timestamp_ms is None:
+            timestamp_ms = int(time.time() * 1000)
+        timestamp_ms = int(timestamp_ms)
+        if timestamp_ms <= 0:
+            raise ValueError("timestamp_ms must be positive")
 
         success_count = 0
 
@@ -139,7 +148,7 @@ class MultiImageWriter:
 
                 # 准备头部
                 header = SimpleImageHeader()
-                header.timestamp = now_ms  # millisecond timestamp
+                header.timestamp = timestamp_ms
                 header.height = height
                 header.width = width
                 header.channels = channels
@@ -188,7 +197,7 @@ class MultiImageWriter:
                 print(f"[MultiImageWriter] Error writing {image_name}: {e}")
                 continue
 
-        self._last_write_ts_ms = now_ms
+        self._last_write_monotonic = now_monotonic
         return success_count > 0
 
     def close(self):

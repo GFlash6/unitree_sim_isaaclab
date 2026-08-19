@@ -1,6 +1,6 @@
 # HoloAgent–IsaacLab 集成主线状态
 
-更新日期：2026-08-10
+更新日期：2026-08-19
 
 ## 目标与判定原则
 
@@ -27,7 +27,7 @@
 | 6. Nav2 地图与代价地图 | 已完成目标区域闭环 | 最终长图栅格已用于真实 Nav2；轨迹全部位于同一自由空间连通域，最小净空 0.552 m |
 | 7. 定位输出接入 Nav2 | 已完成 | `/pose`、TF 和真实估计速度已接入 Nav2，所有生命周期节点可进入 active |
 | 8. Nav2 到 Unitree 控制闭环 | 已完成目标区域闭环，策略边界待加强 | 1.834 m 新地图 action 与可视化四航点闭环均成功；低速死区、狭窄空间和原地转向能力仍有限制 |
-| 9. HoloAgent 主 Agent 接入 | 已完成目标区域闭环，泛化待加强 | Qwen 真实规划→skill→SAM3/SigLIP/HMSG→Nav2→DDS 已驱动机器人真实运动；单视角语义图与全场景泛化仍待扩展 |
+| 9. HoloAgent 主 Agent 接入 | 已完成目标区域闭环，连续语义地图部分完成 | Qwen 真实规划→skill→SAM3/SigLIP/HMSG→Nav2→DDS 已驱动机器人运动；会话内连续 OVO 已有真实产物，HMSG 锚点持久化已通过运行测试，在线 OVO 精化查询仍有阻断 |
 | 10. 稳定性、测试与版本管理 | 部分完成 | 定向测试通过；30 分钟 soak、原生保存压力测试和版本整理尚未完成 |
 
 当前端到端数据流为：
@@ -656,7 +656,7 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 
 ## 当前状态
 
-**已完成目标区域真实闭环，泛化与长时稳定性待加强。** 主 Agent 已在完整 IsaacLab/FAST-LIVO/online_relo/Nav2 运行栈上，通过真实 Qwen 规划和注册 skill 驱动机器人运动；当前语义图只覆盖一个实时 RGB-D 视角，不能外推为完整仓库语义导航能力。
+**已完成目标区域真实闭环，连续语义地图部分完成，新两阶段链路尚未闭环。** 主 Agent 已在完整 IsaacLab/FAST-LIVO/online_relo/Nav2 运行栈上，通过真实 Qwen 规划和注册 skill 驱动机器人运动。当前代码可在单次运行中持续融合 RGB-D-Pose 到 OVO，并将在线精化坐标按 HMSG 对象 ID 持久化；但 OVO 不支持重启续建，完整 HMSG 图不会跟随 OVO 增量更新，且新在线查询已通过实际运行发现阻断。
 
 正式主线现为 `holoagent_agent.py`：自然语言任务 → Qwen DAG → 结构校验 → `sem-nav-skill` / `rel-move-skill` / `arm-skill` → HTTP/ROS。语义导航继续进入 SAM3/SigLIP/HMSG 查询，再由 Nav2 和 DDS 控制机器人。`g1chat_node.py` 仅作为可选语音输入组件，不再定义 Agent 主线。
 
@@ -676,12 +676,26 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 - `isaac_live_semantic_map.py` 已从真实同步 RGB、depth 和 camera pose 生成 76,800 个地图点、9 个 SAM3 实例及 `[9,1152]` 的有限归一化 SigLIP 特征；HMSG 图包含 1 floor、1 room、1 view、9 objects。
 - 修复 IsaacLab camera RGB 已随机器人更新但 `Camera.data.pos_w/quat_w_ros` 未更新的问题：camera 配置现在启用 `update_latest_camera_pose=True`；实测机器人移动约 0.517 m 时相机位姿同步移动约 0.522 m，RGB-D 外参保持稳定。
 - 连续在线建图 `sam3_siglip_real_v2` 已从实时 RGB-D-pose 流处理至 2912 帧并正常 finalize：checkpoint 含 1,971,308 个有限地图点、16 组有限的 `[1,1152]` SigLIP 实例特征，并输出 15 个对象 OBB 点云。该产物证明连续输入路径和实例融合真实运行，不是空 checkpoint；本轮 Agent 闭环仍查询经过独立核验的 9-object HMSG 图。
+- `semantic_mapping_online.py` 现在将同步 RGB、depth 和 `map` 系 camera pose 逐帧加入同一队列，由同一 `slam_backbone` / `obj_detect_track` 持续更新点云、关键帧和对象轨迹。这属于会话内连续 OVO，不是逐帧独立地图。
+- 在线 OVO 新增 `8121/query`，设计上对当前累积实例执行 SigLIP 查询，检查最低分数与 top-2 margin，并返回 `map` 系对象中心、观测数和最后关键帧。该接口的当前运行结果见下方 2026-08-19 核验。
 - `hmsg_query_server.py` 从真实 HMSG/SigLIP 特征查询对象，使用实时 Isaac root pose 与 `/pose` 对齐固定场景目标；空查询、陈旧位姿、无目标和低分结果均失败，不发布占位目标。
-- `semantic_goal_node.py` 只在 HMSG 返回有限目标时发布带朝向和安全距离的 `/object_pose`；查询、位姿或数据失败时发布 `nav_failed`，不伪造 `nav_finish`。
+- `hmsg_query_server.py` 新增原子 JSON 锚点存储；精化结果至少有 3 次观测时，可按 HMSG `object_id` 持久化 `center_map`，后续查询优先使用该覆盖坐标。这是对象锚点覆盖，不是整个 HMSG 图的增量重建。
+- `semantic_goal_node.py` 已改为两阶段流程：先用 HMSG 粗锚点发布 `/semantic_approach_pose`，到达后查询在线 OVO、持久化精化锚点，再发布最终 `/object_pose`。查询、位姿或数据失败时发布 `nav_failed`，不伪造 `nav_finish`。
+- `nav_executor` 已将粗导航 `/semantic_approach_pose` 与最终 `/object_pose` 的状态通道分开，并在已有导航活动时拒绝新位姿覆盖当前任务。
 - `nav_executor` 已能在 Python 3.10 下启动并加载 `unitree` signal registry，不再因默认 `robot_name=g1` 落入空 registry。
 - 成功仍保持 `nav_finish`；取消和失败现分别上报 `nav_canceled` / `nav_failed`。
 - `struck` 是 Nav2 恢复过程告警而非 action 终态；Agent 现在继续等待真实 `nav_finish`、`nav_failed`、`nav_canceled` 或超时取消，避免把仍在执行的恢复误判为完成或失败。
 - `robot_bridge` 的 `/health` 已真实返回 200，关闭时 ROS spin 线程可干净退出，不再 native abort。
+
+## 2026-08-19 连续语义地图运行核验
+
+- 核验时 Isaac Sim、FAST-LIVO、online_relo、Nav2、HMSG `8120` 和在线 OVO `8121` 均未运行；只有 2026-08-10 启动的 `isaac_rgbd_pose_bridge.py` 进程，Isaac shared-memory pose 亦停留在 2026-08-10。因此本次不具备新的物理运动闭环条件，没有用陈旧帧伪造端到端成功。
+- 使用本地真实 SigLIP 权重和 9-object HMSG 图实际启动 `hmsg_query_server.py` 于测试端口 `18120`；`/health` 返回 HTTP 200、1 floor、1 room、9 objects。用陈旧 Isaac pose 请求 `/query` 返回 HTTP 503，证明新鲜度门正常生效。
+- 对临时锚点文件实际请求 `/anchors/update`：`observation_count=2` 返回 HTTP 400；3 次观测首次写入和 5 次观测再次覆盖均返回 HTTP 200。磁盘 JSON 只保留最新 `[3.0,4.0,0.5]`，无遗留 `.tmp`，锚点原子覆盖通过。
+- 实际加载 2912 帧 checkpoint 和 SigLIP 查询模型，确认可恢复 1,971,308 点和 16 个 OVO 对象。但按当前 `query_min_score=0.1` 查询 `yellow plastic crate` 和 `packing table` 分别只得到 `0.0192` 和 `0.0033`，两者都被拒绝，该门限不能直接用于当前连续 checkpoint。
+- 临时关闭分数拒绝门以继续运行 `query_live_object()` 时，checkpoint 的 `obj_ids` 形状为 `(N,1)`，当前代码用二维布尔掩码索引 `(N,3)` 点云，两个查询均触发 `IndexError`。因此 `8121` 对象中心查询当前未通过运行验收。
+- `semantic_goal` 包通过 `colcon build --packages-select semantic_goal --symlink-install`；使用实际安装名 `ros2 run semantic_goal semantic_goal_node.py` 可启动并进入 ROS spin。现有 `run_sem_nav.sh` 却调用不存在的 `semantic_goal_node`，而且节点收到 SIGINT 后会重复 `rclpy.shutdown()` 并以 RCLError 退出；启动与停止路径尚未通过。
+- 相关四个 Python 文件编译检查通过；`test_hmsg_query_transform.py` 与 `test_semantic_goal_math.py` 合计 3 passed，覆盖 sim→map 对齐、锚点原子覆盖和 standoff 目标计算。
 
 ## 真实闭环证据（2026-08-10）
 
@@ -708,16 +722,20 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 ## 当前问题
 
 - Python 3.10 `nav2_msgs` 是当前工作区生成产物，干净环境需按运行说明重建；`robot_bridge` 同时需在 Python 3.10 中安装 FastAPI/uvicorn。
-- 当前用于在线查询的 HMSG 是单个实时 RGB-D 视角生成的目标区域图；连续 SAM3/SigLIP OVO checkpoint 已生成，但尚未完成从该 checkpoint 到多房间 HMSG 的转换和闭环查询，因此不能外推为完整仓库语义导航能力。
-- SigLIP 当前相似度门限 `0.1` 是本场景运行门，尚未做开放集校准；已知目标可查询，不应把未知文本的一次最高分直接解释为可靠识别。
+- 当前是“单视角 HMSG 粗锚点 + 会话内连续 OVO 在线精化 + 对象坐标持久覆盖”；尚未完成从连续 checkpoint 到多视角/多房间 HMSG 的整体转换，因此不能外推为完整仓库语义导航能力。
+- 在线 OVO 启动时不恢复旧 checkpoint，异常退出前也无定期原子快照；`8121` 查询同时受到未标定分数门和 `(N,1)` `obj_ids` 索引错误阻断。
+- 两阶段语义导航尚未加入可用的完整启动脚本，也尚无独立 GT 支撑的新端到端运行记录。
+- HMSG 查询服务的 `min_score=0.1` 已支持旧 9-object 图中的已知目标，但尚未做开放集校准；在线 OVO 的 `query_min_score=0.1` 是另一个独立门限，已被本次运行测试证明会拒绝当前连续 checkpoint 中的已知查询。
 - 尚未实测重定位丢失后的 Agent 行为和 120 s 超时取消；成功、失败、恢复告警和主动取消路径已有真实运行证据。
 - Nav2 `xy_goal_tolerance=0.5 m` 会让已在容差内的语义请求无运动即合法完成；因此验收必须同时查看 GT，不能只看 `nav_finish`。
 
 ## 下一步
 
-1. 将已完成的连续 RGB-D-Pose OVO checkpoint 转成多视角 HMSG，验证跨位置对象查询和导航。
-2. 实测重定位丢失与 120 s Agent 超时取消，归档停车和终态证据。
-3. 校准 SigLIP 开放集门限，并为未知目标建立明确拒绝集。
+1. 修复 `query_live_object()` 对 `(N,1)` `obj_ids` 的处理，并用当前 16-object checkpoint 回归验证对象中心、观测数和 `map` 坐标。
+2. 用已知目标和未知目标标定连续 OVO 的 SigLIP 分数与 margin，不再直接复用 `0.1`。
+3. 修正 `run_sem_nav.sh` 的 ROS 可执行名和节点重复 shutdown，补齐 bridge、`8120`、`8121`、`semantic_goal` 和 `nav_executor` 的可重复启动入口。
+4. 增加 OVO checkpoint 启动恢复和定期原子保存，用两次连续运行验证重启后地图继续增长。
+5. 在完整 Isaac/Nav2 栈中实测“HMSG 粗导航→OVO 精化→锚点落盘→最终导航”，再进行连续 OVO 到多视角 HMSG 的整体转换。
 
 ## 完成判据
 
@@ -752,7 +770,7 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
   - HoloAgent bridge 静态集成测试：30 passed。
   - 本轮 RGB-D 位姿、语义目标数学与 bridge 定向回归：34 passed。
   - SAM3/SigLIP 真实模型装载和失败语义：5 passed。
-  - HMSG 坐标变换：1 passed。
+  - HMSG 坐标变换、原子锚点覆盖与语义 standoff 计算：3 passed。
   - Agent skill 调度、终态等待、超时取消和 Qwen JSON 提取：6 passed。
   - Nav2 静态地图生成测试：3 passed。
   - FAST-LIVO 定向 CTest：4/4 passed。
@@ -783,7 +801,7 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 # 当前推荐推进顺序
 
 1. **在最大可达范围新图上完成重定位与 Nav2 运行验收**：新图已保存并通过离线结构/栅格检查；下一步从多个初始位姿验证 NDT、TF、代价地图和真实 action。封闭结构门后的房间需先明确是否允许修改场景，不能用 reset 或 GT 位姿伪造覆盖。
-2. **接通连续地图到 HMSG**：连续 RGB-D-Pose OVO map 已真实生成；下一步转换为多视角/多房间 HMSG，并验证跨位置查询。
+2. **先修复并验收连续 OVO 在线查询**：处理 `(N,1)` `obj_ids`，标定 SigLIP 门限，修正启动/停止路径；随后再做 checkpoint 恢复和连续 OVO 到多视角 HMSG 的整体转换。
 3. **校准语义拒绝与可达性**：建立 SigLIP 未知目标拒绝集，并在发 Nav2 前检查语义目标附近的可达落脚点。
 4. **补齐 Agent 异常闭环**：真实验证重定位丢失、120 s 超时取消、停车和恢复后的再执行。
 5. **收紧容差并补测控制边界**：量化 0.5 m 目标容差、低速组合命令死区、40 s wall-time 窗口和高 yaw 曲线适配边界。
@@ -810,7 +828,10 @@ FAST-LIVO 定向 CTest 当前 4/4 通过，其中包含：
 - FAST-LIVO 仿真配置：`holoagent_bridge/fast_livo_mid360_sim.yaml`
 - online_relo 配置：`holoagent_bridge/fast_livo_mid360_reloc_sim.yaml`
 - 实时 SAM3/SigLIP 语义建图入口：`HoloAgent/agentic_robot/fsr_vln/scripts/isaac_live_semantic_map.py`
+- 连续 OVO 在线建图与查询：`HoloAgent/agentic_robot/fsr_vln/ovo/entities/semantic_mapping_online.py`
+- Isaac 连续 OVO 配置：`HoloAgent/agentic_robot/fsr_vln/configs/ovo_isaac_sam3.yaml`
 - HMSG 查询服务：`HoloAgent/agentic_robot/fsr_vln/scripts/hmsg_query_server.py`
+- 两阶段语义目标节点：`HoloAgent/agentic_robot/core/src/navigation/semantic_goal/semantic_goal/semantic_goal_node.py`
 - 连续 SAM3/SigLIP checkpoint：`holoagent_bridge/semantic_mapping_data/output/IsaacG1/sam3_siglip_real_v2/semantic_navigation/ovo_map.ckpt`
 - Agent 真实闭环记录：`HoloAgent/agentic_robot/agentOS/task_runs/single_robot_20260810_010119_809856/`
 - Agent 独立运动验收：`holoagent_bridge/validation/agent_semantic_yellow_crate_summary_20260810.json`
